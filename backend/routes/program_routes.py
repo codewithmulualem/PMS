@@ -216,6 +216,75 @@ def _auto_set_activity_status(db, activity_id, progress_pct):
         db.execute("UPDATE program_activities SET status=? WHERE id=?", (new_status, activity_id))
 
 
+def _derive_activity_status(db, activity_id):
+    """Derive an activity's status from its direct children's statuses."""
+    activity = db.execute("SELECT status FROM program_activities WHERE id=?", (activity_id,)).fetchone()
+    if not activity or activity["status"] in ("cancelled", "completed"):
+        return
+    children = rows_to_list(
+        db.execute("SELECT status FROM program_activities WHERE parent_id=?", (activity_id,)).fetchall()
+    )
+    active = [c["status"] for c in children if c["status"] not in ("cancelled",)]
+    if not active:
+        return
+    if all(s == "completed" for s in active):
+        new_status = "completed"
+    elif any(s == "in_progress" for s in active):
+        new_status = "in_progress"
+    elif any(s == "on_hold" for s in active):
+        new_status = "on_hold"
+    elif all(s == "not_started" for s in active):
+        new_status = "not_started"
+    else:
+        return
+    if new_status != activity["status"]:
+        db.execute("UPDATE program_activities SET status=? WHERE id=?", (new_status, activity_id))
+        _log(db, "program_activity", activity_id, "status_update",
+             old_value={"status": activity["status"]}, new_value={"status": new_status})
+
+
+def _derive_program_status(db, program_id):
+    """Derive a program's status from its top-level activities' statuses."""
+    prog = db.execute("SELECT status FROM programs WHERE id=?", (program_id,)).fetchone()
+    if not prog or prog["status"] in ("cancelled", "completed"):
+        return
+    top = rows_to_list(
+        db.execute("SELECT status FROM program_activities WHERE program_id=? AND parent_id IS NULL",
+                   (program_id,)).fetchall()
+    )
+    active = [t["status"] for t in top if t["status"] not in ("cancelled",)]
+    if not active:
+        return
+    if all(s == "completed" for s in active):
+        new_status = "completed"
+    elif any(s == "in_progress" for s in active):
+        new_status = "in_progress"
+    elif any(s == "on_hold" for s in active):
+        new_status = "on_hold"
+    elif all(s == "not_started" for s in active):
+        new_status = "planning"
+    else:
+        return
+    if new_status != prog["status"]:
+        db.execute("UPDATE programs SET status=? WHERE id=?", (new_status, program_id))
+        _log(db, "program", program_id, "status_update",
+             old_value={"status": prog["status"]}, new_value={"status": new_status})
+
+
+def _propagate_status(db, activity_id):
+    """Walk up from an activity to derive ancestor statuses, then the program."""
+    activity = db.execute(
+        "SELECT parent_id, program_id FROM program_activities WHERE id=?", (activity_id,)
+    ).fetchone()
+    if not activity:
+        return
+    if activity["parent_id"]:
+        _derive_activity_status(db, activity["parent_id"])
+        _propagate_status(db, activity["parent_id"])
+    else:
+        _derive_program_status(db, activity["program_id"])
+
+
 # ---- Assignable Employees ----
 
 @bp.get("/assignable")
@@ -444,6 +513,9 @@ def update_activity(activity_id):
             new_parent = data.get("parent_id")
             if new_parent and new_parent != activity["parent_id"]:
                 _propagate_progress(db, new_parent)
+            # Propagate status changes up the tree and to the program
+            if "status" in updates or "progress_pct" in updates:
+                _propagate_status(db, activity_id)
             db.commit()
         return jsonify({"ok": True})
     finally:
@@ -507,6 +579,7 @@ def create_activity_kpi(activity_id):
         _log(db, "activity_kpi", cur.lastrowid, "create", new_value=data)
         if data.get("actual_value") is not None:
             _recalc_progress_from_kpis(db, activity_id)
+            _propagate_status(db, activity_id)
         db.commit()
         return jsonify({"id": cur.lastrowid}), 201
     finally:
@@ -541,8 +614,9 @@ def update_activity_kpi(kpi_id):
             set_clause = ", ".join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE activity_kpis SET {set_clause} WHERE id=?", (*updates.values(), kpi_id))
             _log(db, "activity_kpi", kpi_id, "update", old_value=row_to_dict(kpi), new_value=updates)
-            if "actual_value" in updates:
+            if "actual_value" in updates or "target_value" in updates or "weight" in updates:
                 _recalc_progress_from_kpis(db, kpi["activity_id"])
+                _propagate_status(db, kpi["activity_id"])
             db.commit()
         return jsonify({"ok": True})
     finally:
@@ -561,6 +635,7 @@ def delete_activity_kpi(kpi_id):
         db.execute("DELETE FROM activity_kpis WHERE id=?", (kpi_id,))
         _log(db, "activity_kpi", kpi_id, "delete", old_value=row_to_dict(kpi))
         _recalc_progress_from_kpis(db, activity_id)
+        _propagate_status(db, activity_id)
         db.commit()
         return jsonify({"ok": True})
     finally:
@@ -587,6 +662,8 @@ def log_progress(activity_id):
         )
         db.execute("UPDATE program_activities SET progress_pct=? WHERE id=?", (progress, activity_id))
         _log(db, "program_activity", activity_id, "progress", new_value={"progress_pct": progress, "notes": data.get("notes")})
+        _auto_set_activity_status(db, activity_id, progress)
+        _propagate_status(db, activity_id)
         if activity["parent_id"]:
             _propagate_progress(db, activity["parent_id"])
         db.commit()

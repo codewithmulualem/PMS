@@ -451,3 +451,78 @@ class TestKpiProgressRecalc:
         s, d = jget(client, f"/api/programs/{pid}", tok)
         activity = [t for t in d["activities"] if t["id"] == tid][0]
         assert activity["status"] == "on_hold"
+
+
+# ---------------------------------------------------------------------------
+# Status propagation
+# ---------------------------------------------------------------------------
+
+class TestStatusPropagation:
+    def test_completing_all_activities_marks_program_completed(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P1")
+        t1 = create_activity(client, tok, pid, title="A1")
+        t2 = create_activity(client, tok, pid, title="A2")
+        jpost(client, f"/api/programs/activities/{t1}/progress", {"progress_pct": 100}, tok)
+        jpost(client, f"/api/programs/activities/{t2}/progress", {"progress_pct": 100}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "completed"
+
+    def test_starting_one_activity_marks_program_in_progress(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P2")
+        t1 = create_activity(client, tok, pid, title="A1")
+        t2 = create_activity(client, tok, pid, title="A2")
+        jpost(client, f"/api/programs/activities/{t1}/progress", {"progress_pct": 50}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "in_progress"
+
+    def test_partial_completion_keeps_in_progress(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P3")
+        t1 = create_activity(client, tok, pid, title="A1")
+        t2 = create_activity(client, tok, pid, title="A2")
+        jpost(client, f"/api/programs/activities/{t1}/progress", {"progress_pct": 100}, tok)
+        jpost(client, f"/api/programs/activities/{t2}/progress", {"progress_pct": 50}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "in_progress"
+
+    def test_cancelled_activity_ignored_in_derivation(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P4")
+        t1 = create_activity(client, tok, pid, title="A1")
+        t2 = create_activity(client, tok, pid, title="A2")
+        jpost(client, f"/api/programs/activities/{t1}/progress", {"progress_pct": 100}, tok)
+        jput(client, f"/api/programs/activities/{t2}", {"status": "cancelled"}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "completed"
+
+    def test_manually_cancelled_program_stays_cancelled(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P5")
+        t1 = create_activity(client, tok, pid, title="A1")
+        jput(client, f"/api/programs/{pid}", {"status": "cancelled"}, tok)
+        jpost(client, f"/api/programs/activities/{t1}/progress", {"progress_pct": 100}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "cancelled"
+
+    def test_child_activity_status_derived_from_subchildren(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P6")
+        parent = create_activity(client, tok, pid, title="Parent")
+        c1 = create_activity(client, tok, pid, title="C1", parent_id=parent)
+        c2 = create_activity(client, tok, pid, title="C2", parent_id=parent)
+        jpost(client, f"/api/programs/activities/{c1}/progress", {"progress_pct": 100}, tok)
+        jpost(client, f"/api/programs/activities/{c2}/progress", {"progress_pct": 100}, tok)
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "completed"
+        parent_act = [a for a in d["activities"] if a["id"] == parent][0]
+        assert parent_act["status"] == "completed"
+
+    def test_program_goes_to_planning_when_all_not_started(self, client):
+        tok = login(client, "manager1")
+        pid = create_program(client, tok, name="P7")
+        t1 = create_activity(client, tok, pid, title="A1")
+        t2 = create_activity(client, tok, pid, title="A2")
+        s, d = jget(client, f"/api/programs/{pid}", tok)
+        assert d["status"] == "planning"
