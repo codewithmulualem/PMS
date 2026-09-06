@@ -2,13 +2,17 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Icons } from "../components/icons";
 import { api } from "../api";
+import { ROLE_LABELS } from "../i18n";
 
 const FEATURES = [
-  { icon: "target", title: "Explainable scoring", text: "Every score is a transparent, weighted calculation." },
-  { icon: "spark", title: "AI intelligence", text: "Insights and predictions tagged with their source data." },
-  { icon: "shield", title: "Governed & auditable", text: "Human-in-the-loop, full audit trail, RBAC." },
-  { icon: "chart", title: "Trends & forecasts", text: "Performance history and completion probabilities." },
+  { icon: "target", title: "ሊብራራ የሚችል ነጥብ", text: "እያንዳንዱ ነጥብ ግልጽ እና በክብደት የተሰላ ነው።" },
+  { icon: "spark", title: "የAI መረጃ", text: "ግንዛቤዎች እና ትንበያዎች ከምንጫቸው ጋር ይታያሉ።" },
+  { icon: "shield", title: "ቁጥጥር እና ኦዲት", text: "የሰው ቁጥጥር፣ ሙሉ የኦዲት መዝገብ እና RBAC።" },
+  { icon: "chart", title: "አዝማሚያ እና ትንበያ", text: "የአፈጻጸም ታሪክ እና የማጠናቀቅ ዕድል።" },
 ];
+
+// Optional local-only convenience. Production builds should leave this unset.
+const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD || "";
 
 export default function Login() {
   const { login } = useAuth();
@@ -42,16 +46,15 @@ export default function Login() {
           <div className="brand-mark">EP</div>
           <div>
             <div className="brand-name">EPA PMS</div>
-            <div className="brand-sub">Environmental Performance</div>
+          <div className="brand-sub">የአካባቢ አፈጻጸም</div>
           </div>
         </div>
         <h1>
-          Environmental <em>performance</em> intelligence, without the black box.
+          ግልጽ የአካባቢ <em>አፈጻጸም</em> መረጃ፣ ያለ ጥቁር ሳጥን።
         </h1>
         <p>
-          Measure environmental objectives transparently. Cascade goals through your EPA hierarchy. Track KPIs,
-          competencies, and evaluations continuously — with an AI layer that advises,
-          explains, and never decides on its own.
+          የአካባቢ ዓላማዎችን በግልጽነት ይለኩ። ግቦችን በEPA መዋቅርዎ ውስጥ ያውርዱ። KPIዎችን፣
+          ብቃቶችን እና ግምገማዎችን በቀጣይነት ይከታተሉ፤ AI ይመክራል እና ያብራራል፣ በራሱ ውሳኔ አይሰጥም።
         </p>
         <div className="login-feature">
           {FEATURES.map((f, i) => {
@@ -68,23 +71,23 @@ export default function Login() {
 
       <div className="login-panel">
         <div className="login-card">
-          <div className="login-brand">Welcome back</div>
-          <div className="login-tag">Sign in to your performance workspace</div>
+          <div className="login-brand">እንኳን ደህና መጡ</div>
+          <div className="login-tag">ወደ የአፈጻጸም የሥራ ቦታዎ ይግቡ</div>
 
           {error && <div className="error-banner">{error}</div>}
 
           <form onSubmit={handleSubmit}>
             <div className="field">
-              <label>Username</label>
+              <label>የተጠቃሚ ስም</label>
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. manager1"
+                placeholder="ለምሳሌ፦ manager1"
                 autoFocus
               />
             </div>
             <div className="field">
-              <label>Password</label>
+              <label>የይለፍ ቃል</label>
               <input
                 type="password"
                 value={password}
@@ -93,15 +96,15 @@ export default function Login() {
               />
             </div>
             <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: "100%" }}>
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? "በመግባት ላይ…" : "ግባ"}
             </button>
           </form>
 
           <div className="login-quick" style={{ marginTop: 20 }}>
-            <span className="hint">Demo accounts — tap to autofill</span>
+            <span className="hint">የሙከራ መለያዎች — ለመሙላት ይንኩ</span>
             {demo.map((d) => (
-              <button key={d.username} onClick={() => { setUsername(d.username); setPassword(d.password); }} title={d.role}>
-                {d.username} · {d.role}
+              <button key={d.username} onClick={() => { setUsername(d.username); if (DEMO_PASSWORD) setPassword(DEMO_PASSWORD); }} title={ROLE_LABELS[d.role] || d.role}>
+                {d.username} · {ROLE_LABELS[d.role] || d.role}
               </button>
             ))}
           </div>

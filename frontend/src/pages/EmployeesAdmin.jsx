@@ -7,6 +7,7 @@ import Modal from "../components/Modal";
 import Skeleton from "../components/Skeleton";
 import EmployeeDashboard from "./EmployeeDashboard";
 import { Icons } from "../components/icons";
+import { ROLE_LABELS, statusLabel } from "../i18n";
 
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("");
@@ -15,7 +16,7 @@ function initials(name = "") {
 const AVATAR_COLORS = ["#4c5fd5", "#0e8f7e", "#b17a17", "#d64545", "#2f9e44", "#7c5cd5"];
 
 // Fallback until /reference/roles loads (or for roles without access).
-const ACCOUNT_ROLES = ["employee", "manager", "executive", "admin"];
+const ACCOUNT_ROLES = ["employee", "team_leader", "dept_head", "director", "executive", "admin"];
 
 const EMPTY_FORM = {
   full_name: "", email: "", position: "", job_grade: "",
@@ -87,7 +88,7 @@ export default function EmployeesAdmin() {
         setAccountTarget(null);
         setResetResult(res);
       } else {
-        toast.push(`${accountTarget.full_name} login updated`, "success");
+        toast.push(`የ${accountTarget.full_name} መግቢያ ተሻሽሏል`, "success");
         setAccountTarget(null);
       }
       load();
@@ -136,7 +137,7 @@ export default function EmployeesAdmin() {
           setCreatedLogin(res);
           setShowForm(false);
         } else {
-          toast.push(`${form.full_name} updated`, "success");
+          toast.push(`${form.full_name} ተሻሽሏል`, "success");
           setShowForm(false);
         }
         setEditing(null);
@@ -147,7 +148,7 @@ export default function EmployeesAdmin() {
           setCreatedLogin(res);
           setShowForm(false);
         } else {
-          toast.push(`${form.full_name} added to the organization`, "success");
+          toast.push(`${form.full_name} ወደ ድርጅቱ ተጨምሯል`, "success");
           setShowForm(false);
         }
         setEditing(null);
@@ -161,10 +162,10 @@ export default function EmployeesAdmin() {
   }
 
   async function removeEmployee(emp) {
-    if (!confirm(`Delete ${emp.full_name} permanently? This removes their login, KPIs, goals, evaluations, and approval records. This cannot be undone.`)) return;
+    if (!confirm(`${emp.full_name} በቋሚነት ይሰረዝ? መግቢያው፣ KPIዎቹ፣ ግቦቹ፣ ግምገማዎቹ እና የማጽደቅ መዝገቦቹ ይወገዳሉ። ይህ እርምጃ አይመለስም።`)) return;
     try {
       await api.delete(`/employees/${emp.id}`);
-      toast.push(`${emp.full_name} deleted`, "success");
+      toast.push(`${emp.full_name} ተሰርዟል`, "success");
       load();
     } catch (err) {
       toast.push(err.message, "error");
@@ -172,7 +173,7 @@ export default function EmployeesAdmin() {
   }
 
   if (selected) {
-    return <EmployeeDashboard employeeId={selected} backLabel="Back to employees" onBack={() => setSelected(null)} />;
+    return <EmployeeDashboard employeeId={selected} backLabel="ወደ ሰራተኞች ተመለስ" onBack={() => setSelected(null)} />;
   }
 
   if (error && !employees.length) return <div className="error-banner">{error}</div>;
@@ -186,11 +187,11 @@ export default function EmployeesAdmin() {
   return (
     <div>
       <Topbar
-        subtitle={`${employees.length} people in the organization`}
+        subtitle={`${employees.length} በድርጅቱ ውስጥ ያሉ ሰዎች`}
       >
         {canCreate && (
           <button className="btn btn-primary" onClick={openAdd}>
-            <Icons.plus size={16} /> Add employee
+            <Icons.plus size={16} /> ሰራተኛ ጨምር
           </button>
         )}
       </Topbar>
@@ -199,38 +200,38 @@ export default function EmployeesAdmin() {
 
       {showForm && (
         <Modal
-          title={editing ? "Edit employee" : "Add employee"}
-          subtitle={editing ? `Update ${editing.full_name}'s profile, login, and reporting line` : "Create a record and reporting relationship"}
+          title={editing ? "ሰራተኛ አርትዕ" : "ሰራተኛ ጨምር"}
+          subtitle={editing ? `የ${editing.full_name} መገለጫ፣ መግቢያ እና የሪፖርት መስመር ያሻሽሉ` : "መዝገብ እና የሪፖርት ግንኙነት ይፍጠሩ"}
           onClose={() => { setShowForm(false); setEditing(null); setError(null); }}
         >
           <form onSubmit={saveEmployee}>
             {error && <div className="error-banner" style={{ marginBottom: 12 }}>{error}</div>}
             <div className="form-grid">
               <div className="field">
-                <label>Full name</label>
+                <label>ሙሉ ስም</label>
                 <input required value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
               </div>
               <div className="field">
-                <label>Email</label>
+                <label>ኢሜይል</label>
                 <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="field">
-                <label>Position</label>
-                <input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="e.g. Software Engineer" />
+                <label>የሥራ መደብ</label>
+                <input value={form.position} onChange={(e) => setForm({ ...form, position: e.target.value })} placeholder="ለምሳሌ፦ የሶፍትዌር መሐንዲስ" />
               </div>
               <div className="field">
-                <label>Job grade</label>
-                <input value={form.job_grade} onChange={(e) => setForm({ ...form, job_grade: e.target.value })} placeholder="e.g. G5" />
+                <label>የሥራ ደረጃ</label>
+                <input value={form.job_grade} onChange={(e) => setForm({ ...form, job_grade: e.target.value })} placeholder="ለምሳሌ፦ ደረጃ 5" />
               </div>
               <div className="field">
-                <label>Department</label>
+                <label>መምሪያ</label>
                 <select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
                   <option value="">—</option>
                   {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               <div className="field">
-                <label>Manager</label>
+                <label>አስተዳዳሪ</label>
                 <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: e.target.value })}>
                   <option value="">—</option>
                   {employees
@@ -239,38 +240,38 @@ export default function EmployeesAdmin() {
                 </select>
               </div>
               <div className="field">
-                <label>Employment status</label>
+                <label>የሥራ ሁኔታ</label>
                 <select value={form.employment_status} onChange={(e) => setForm({ ...form, employment_status: e.target.value })}>
-                  <option value="active">Active</option>
-                  <option value="probation">Probation</option>
-                  <option value="on_leave">On Leave</option>
-                  <option value="resigned">Resigned</option>
-                  <option value="terminated">Terminated</option>
+                  <option value="active">ንቁ</option>
+                  <option value="probation">የሙከራ ጊዜ</option>
+                  <option value="on_leave">በፈቃድ ላይ</option>
+                  <option value="resigned">ሥራ ለቋል</option>
+                  <option value="terminated">ተቋርጧል</option>
                 </select>
               </div>
               <div className="field">
-                <label>Date joined</label>
+                <label>የተቀጠረበት ቀን</label>
                 <input type="date" value={form.date_joined} onChange={(e) => setForm({ ...form, date_joined: e.target.value })} />
               </div>
               <div className="field">
-                <label>Username <span className="text-faint">(sign-in)</span></label>
-                <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="defaults to email local part" autoComplete="off" />
+                <label>የተጠቃሚ ስም <span className="text-faint">(መግቢያ)</span></label>
+                <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="ካልተሞላ ከኢሜይል ይፈጠራል" autoComplete="off" />
               </div>
               <div className="field">
-                <label>{editing ? "Password" : "Initial password"} <span className="text-faint">({editing ? "blank keeps current" : "optional, blank generates temp"})</span></label>
-                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={editing ? "Leave blank to keep unchanged" : "Blank generates one-time password"} autoComplete="new-password" />
+                <label>{editing ? "የይለፍ ቃል" : "የመጀመሪያ የይለፍ ቃል"} <span className="text-faint">({editing ? "ባዶ ከሆነ አሁኑ ይቀጥላል" : "አማራጭ፣ ባዶ ከሆነ ጊዜያዊ ይፈጠራል"})</span></label>
+                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={editing ? "እንዳለ ለማቆየት ባዶ ይተዉ" : "ባዶ ከሆነ አንድ ጊዜ የሚሠራ ይፈጠራል"} autoComplete="new-password" />
               </div>
               <div className="field">
-                <label>Role</label>
+                <label>ሚና</label>
                 <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {roles.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex gap-8" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-              <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); setEditing(null); setError(null); }}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setShowForm(false); setEditing(null); setError(null); }}>ዝጋ</button>
               <button className="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? "Saving…" : editing ? "Save changes" : "Create employee"}
+                {saving ? "በማስቀመጥ ላይ…" : editing ? "ለውጦችን አስቀምጥ" : "ሰራተኛ ፍጠር"}
               </button>
             </div>
           </form>
@@ -279,55 +280,55 @@ export default function EmployeesAdmin() {
 
       {createdLogin && (
         <Modal
-          title="Login created"
-          subtitle="Share the initial credentials — they are shown only once"
+          title="መግቢያ ተፈጥሯል"
+          subtitle="የመጀመሪያ መግቢያ መረጃዎችን ያካፍሉ — አንድ ጊዜ ብቻ ይታያሉ"
           onClose={() => setCreatedLogin(null)}
         >
           <div className="card" style={{ padding: 16 }}>
             <div className="field">
-              <label>Username</label>
+              <label>የተጠቃሚ ስም</label>
               <div className="mono" style={{ fontSize: 15, padding: "8px 0" }}>{createdLogin.username}</div>
             </div>
             <div className="field" style={{ marginTop: 8 }}>
-              <label>Initial password (one-time)</label>
+              <label>የመጀመሪያ የይለፍ ቃል (አንድ ጊዜ)</label>
               <div className="mono" style={{ fontSize: 15, padding: "8px 0" }}>{createdLogin.temp_password}</div>
             </div>
           </div>
           <div className="flex gap-8" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-            <button className="btn btn-primary" onClick={() => setCreatedLogin(null)}>Got it</button>
+            <button className="btn btn-primary" onClick={() => setCreatedLogin(null)}>ገብቶኛል</button>
           </div>
         </Modal>
       )}
 
       {accountTarget && (
         <Modal
-          title={accountTarget.has_account ? `Login · ${accountTarget.full_name}` : `Enable login · ${accountTarget.full_name}`}
-          subtitle={accountTarget.has_account ? "Set a new initial password (blank generates a temporary one)" : "Create a sign-in account (blank password generates a temporary one)"}
+          title={accountTarget.has_account ? `መግቢያ · ${accountTarget.full_name}` : `መግቢያ አንቃ · ${accountTarget.full_name}`}
+          subtitle={accountTarget.has_account ? "አዲስ የመጀመሪያ የይለፍ ቃል ያዘጋጁ (ባዶ ከሆነ ጊዜያዊ ይፈጠራል)" : "የመግቢያ መለያ ይፍጠሩ (ባዶ የይለፍ ቃል ከሆነ ጊዜያዊ ይፈጠራል)"}
           onClose={() => { setAccountTarget(null); setError(null); }}
         >
           <form onSubmit={saveAccount}>
             <div className="form-grid">
               <div className="field">
-                <label>Username</label>
-                <input value={accountForm.username} onChange={(e) => setAccountForm({ ...accountForm, username: e.target.value })} placeholder="defaults to the email local part" autoComplete="off" />
+                <label>የተጠቃሚ ስም</label>
+                <input value={accountForm.username} onChange={(e) => setAccountForm({ ...accountForm, username: e.target.value })} placeholder="ካልተሞላ ከኢሜይል ይፈጠራል" autoComplete="off" />
               </div>
               <div className="field">
-                <label>New password</label>
-                <input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} placeholder="blank generates a temporary one" autoComplete="new-password" />
+                <label>አዲስ የይለፍ ቃል</label>
+                <input type="password" value={accountForm.password} onChange={(e) => setAccountForm({ ...accountForm, password: e.target.value })} placeholder="ባዶ ከሆነ ጊዜያዊ ይፈጠራል" autoComplete="new-password" />
               </div>
               <div className="field">
-                <label>Role</label>
+                <label>ሚና</label>
                 <select value={accountForm.role} onChange={(e) => setAccountForm({ ...accountForm, role: e.target.value })}>
-                  <option value="">— keep current ({accountTarget.role || "employee"}) —</option>
-                  {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="">— ያለውን አቆይ ({ROLE_LABELS[accountTarget.role] || ROLE_LABELS.employee}) —</option>
+                  {roles.map((r) => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
                 </select>
               </div>
             </div>
             {error && <div className="error-banner">{error}</div>}
             <div className="flex gap-8" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-              <button type="button" className="btn btn-secondary" onClick={() => { setAccountTarget(null); setError(null); }}>Cancel</button>
+              <button type="button" className="btn btn-secondary" onClick={() => { setAccountTarget(null); setError(null); }}>ዝጋ</button>
               <button className="btn btn-primary" type="submit" disabled={savingAccount}>
-                {savingAccount ? "Saving…" : accountTarget.has_account ? "Reset password" : "Create login"}
+                {savingAccount ? "በማስቀመጥ ላይ…" : accountTarget.has_account ? "የይለፍ ቃል ዳግም አዘጋጅ" : "መግቢያ ፍጠር"}
               </button>
             </div>
           </form>
@@ -336,50 +337,50 @@ export default function EmployeesAdmin() {
 
       {resetResult && (
         <Modal
-          title="Password reset"
-          subtitle="Temporary credentials — shown only once"
+          title="የይለፍ ቃል ዳግም ተዘጋጅቷል"
+          subtitle="ጊዜያዊ መግቢያ መረጃ — አንድ ጊዜ ብቻ ይታያል"
           onClose={() => { setResetResult(null); setAccountTarget(null); setError(null); }}
         >
           <div className="card" style={{ padding: 16 }}>
             <div className="field">
-              <label>Username</label>
+              <label>የተጠቃሚ ስም</label>
               <div className="mono" style={{ fontSize: 15, padding: "8px 0" }}>{resetResult.username}</div>
             </div>
             <div className="field" style={{ marginTop: 8 }}>
-              <label>Temporary password</label>
+              <label>ጊዜያዊ የይለፍ ቃል</label>
               <div className="mono" style={{ fontSize: 15, padding: "8px 0" }}>{resetResult.temp_password}</div>
             </div>
           </div>
           <div className="flex gap-8" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-            <button className="btn btn-primary" onClick={() => { setResetResult(null); setAccountTarget(null); setError(null); }}>Got it</button>
+            <button className="btn btn-primary" onClick={() => { setResetResult(null); setAccountTarget(null); setError(null); }}>ገብቶኛል</button>
           </div>
         </Modal>
       )}
 
       <div className="card">
         <div className="flex-between mb-16" style={{ flexWrap: "wrap", gap: 10 }}>
-          <div className="card-title" style={{ margin: 0 }}>Directory</div>
+          <div className="card-title" style={{ margin: 0 }}>የሰራተኞች ዝርዝር</div>
           <input
             type="search"
-            placeholder="Search name, role, department…"
+            placeholder="ስም፣ ሚና ወይም መምሪያ ፈልግ…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{ padding: "8px 12px", border: "1px solid var(--line-strong)", borderRadius: 9, fontSize: 13, width: 260 }}
           />
         </div>
         {filtered.length === 0 ? (
-          <div className="empty-state">No employees match your search.</div>
+          <div className="empty-state">ከፍለጋዎ ጋር የሚዛመድ ሰራተኛ የለም።</div>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th>Position</th>
-                  <th>Department</th>
-                  <th>Grade</th>
-                  <th>Role</th>
-                  <th>Status</th>
+                  <th>ሰራተኛ</th>
+                  <th>የሥራ መደብ</th>
+                  <th>መምሪያ</th>
+                  <th>ደረጃ</th>
+                  <th>ሚና</th>
+                  <th>ሁኔታ</th>
                   <th className="num" />
                 </tr>
               </thead>
@@ -396,7 +397,7 @@ export default function EmployeesAdmin() {
                             <div className="cell-sub">
                               {emp.has_account
                                 ? <><Icons.key size={11} style={{ verticalAlign: "-1px" }} /> <span className="mono">{emp.username}</span></>
-                                : <span className="chip chip-neutral" style={{ marginTop: 2 }}>no login</span>}
+                                : <span className="chip chip-neutral" style={{ marginTop: 2 }}>መግቢያ የለም</span>}
                             </div>
                           )}
                         </div>
@@ -406,22 +407,22 @@ export default function EmployeesAdmin() {
                     <td>{emp.department_name || "—"}</td>
                     <td className="mono">{emp.job_grade || "—"}</td>
                     <td>
-                      <span className="role-pill" style={{ textTransform: "capitalize" }}>{emp.role || "employee"}</span>
+                      <span className="role-pill" style={{ textTransform: "none" }}>{ROLE_LABELS[emp.role] || emp.role || ROLE_LABELS.employee}</span>
                     </td>
                     <td>
                       {emp.employment_status === "active"
-                        ? <span className="chip chip-success">active</span>
-                        : <span className="chip chip-neutral">{emp.employment_status || "active"}</span>}
+                        ? <span className="chip chip-success">ንቁ</span>
+                        : <span className="chip chip-neutral">{statusLabel(emp.employment_status || "active")}</span>}
                     </td>
                     <td className="num">
                       <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
                         {canCreate && (
                           <>
                             <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); openLogin(emp); }}>
-                              <Icons.key size={13} /> {emp.has_account ? "Login" : "Enable login"}
+                              <Icons.key size={13} /> {emp.has_account ? "ግባ" : "መግቢያ አንቃ"}
                             </button>
-                            <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(emp); }}><Icons.edit size={13} /> Edit</button>
-                            <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); removeEmployee(emp); }}><Icons.trash size={13} /> Delete</button>
+                            <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(emp); }}><Icons.edit size={13} /> አርትዕ</button>
+                            <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); removeEmployee(emp); }}><Icons.trash size={13} /> ሰርዝ</button>
                           </>
                         )}
                         <Icons.external size={14} className="text-faint" />

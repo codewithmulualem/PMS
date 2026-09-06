@@ -78,5 +78,3 @@ CREATE INDEX IF NOT EXISTS idx_program_activities_program ON program_activities(
 CREATE INDEX IF NOT EXISTS idx_program_activities_parent ON program_activities(parent_id);
 CREATE INDEX IF NOT EXISTS idx_program_activities_assignee ON program_activities(assignee_id);
 CREATE INDEX IF NOT EXISTS idx_programs_cycle ON programs(cycle_id);
-
-INSERT INTO schema_migrations (version) VALUES ('013');

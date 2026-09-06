@@ -12,6 +12,8 @@ import EmployeeDashboard from "./EmployeeDashboard";
 import ManagerEvalModal from "../components/ManagerEvalModal";
 import { Icons } from "../components/icons";
 
+const WEEKLY_SUMMARY_KEYS = [];
+
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("");
 }
@@ -26,20 +28,29 @@ export default function TeamDashboard({ managerId }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [evalTarget, setEvalTarget] = useState(null);
+  const [weeklySummary, setWeeklySummary] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api.get(`/managers/${managerId}/team-dashboard?cycle_id=${cycleId || ""}`)
-      .then((d) => !cancelled && setData(d))
+    Promise.all([
+      api.get(`/managers/${managerId}/team-dashboard?cycle_id=${cycleId || ""}`),
+      api.get("/weekly-plans/summary").catch(() => null),
+    ])
+      .then(([dashData, weeklyData]) => {
+        if (!cancelled) {
+          setData(dashData);
+          if (weeklyData) setWeeklySummary(weeklyData);
+        }
+      })
       .catch((err) => !cancelled && setError(err.message))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, [managerId, cycleId]);
 
   if (selected) {
-    return <EmployeeDashboard employeeId={selected} backLabel="Back to team" onBack={() => setSelected(null)} />;
+    return <EmployeeDashboard employeeId={selected} backLabel="ወደ ቡድኑ ተመለስ" onBack={() => setSelected(null)} />;
   }
 
   if (loading && !data) return <Skeleton lines={6} height={22} />;
@@ -53,91 +64,149 @@ export default function TeamDashboard({ managerId }) {
   return (
     <div>
       <Topbar
-        subtitle={`${data.team_size} direct report${data.team_size === 1 ? "" : "s"} · ${current?.name || ""}`}
+        subtitle={`${data.team_size} በቀጥታ የሚመሩ ሰራተኞች · ${current?.name || ""}`}
       />
 
       <div className="stat-grid">
         <StatCard
-          label="Team Average"
+          label="የቡድን አማካይ"
           value={data.average_score != null ? data.average_score.toFixed(1) : "—"}
           accent="var(--indigo)"
           tag="calc"
-          foot={<span>vs org average <b className="mono">{orgDiff != null ? `${orgDiff >= 0 ? "+" : ""}${orgDiff.toFixed(1)}` : "—"}</b></span>}
+          foot={<span>ከድርጅት አማካይ ጋር <b className="mono">{orgDiff != null ? `${orgDiff >= 0 ? "+" : ""}${orgDiff.toFixed(1)}` : "—"}</b></span>}
         />
         <StatCard
-          label="High Performers"
+          label="ከፍተኛ አፈጻጸም ያላቸው"
           value={data.high_performers.length}
           accent="var(--green)"
           tag="calc"
-          foot={<span>scoring ≥ 80</span>}
+          foot={<span>ነጥብ ≥ 80</span>}
         />
         <StatCard
-          label="Need Attention"
+          label="ትኩረት የሚፈልጉ"
           value={data.employees_needing_attention.length}
           accent="var(--crimson)"
           tag="risk"
-          foot={<span>at-risk goals or score &lt; 60</span>}
+          foot={<span>አደጋ ላይ ያሉ ግቦች ወይም ነጥብ &lt; 60</span>}
         />
         <StatCard
-          label="Evaluations Pending"
+          label="የሚጠብቁ ግምገማዎች"
           value={data.evaluations_pending}
           accent="var(--amber)"
           tag="risk"
-          foot={<span>manager assessments outstanding</span>}
+          foot={<span>የአስተዳዳሪ ግምገማዎች ይቀራሉ</span>}
         />
       </div>
 
+      {/* Weekly Plans Summary */}
+      {weeklySummary && weeklySummary.summaries && weeklySummary.summaries.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">
+            የዚህ ሳምንት ዕቅዶች
+            <span className="chip chip-neutral">{weeklySummary.week_start} እስከ {weeklySummary.week_end}</span>
+          </div>
+          <div className="grid grid-2">
+            {weeklySummary.summaries.map((emp) => (
+              <div
+                key={emp.employee_id}
+                style={{
+                  padding: "10px 12px",
+                  border: "1px solid var(--line)",
+                  borderRadius: 8,
+                  background: "#fbfcfe",
+                }}
+              >
+                <div className="flex-between" style={{ marginBottom: 6 }}>
+                  <div className="cell-strong">{emp.full_name}</div>
+                  <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>
+                    {emp.done_tasks}/{emp.total_tasks} ተጠናቀዋል
+                  </div>
+                </div>
+                <div className="meter-track">
+                  <div
+                    className="meter-fill"
+                    style={{
+                      width: `${emp.completion_pct}%`,
+                      background: emp.completion_pct >= 80 ? "var(--green)" :
+                                  emp.completion_pct >= 50 ? "var(--indigo)" : "var(--amber)",
+                    }}
+                  />
+                </div>
+                {emp.tasks.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12 }}>
+                    {emp.tasks.slice(0, 3).map((t) => (
+                      <div key={t.id} style={{
+                        padding: "3px 0",
+                        color: t.status === "done" ? "var(--text-faint)" : "var(--text)",
+                        textDecoration: t.status === "done" ? "line-through" : "none",
+                      }}>
+                        {t.status === "done" ? "✓" : "○"} {t.title}
+                      </div>
+                    ))}
+                    {emp.tasks.length > 3 && (
+                      <div style={{ color: "var(--text-faint)", marginTop: 2 }}>
+                        +{emp.tasks.length - 3} ተጨማሪ
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-2">
         <div className="card">
-          <div className="card-title">Rating Distribution <EpistemicTag kind="calc" /></div>
+          <div className="card-title">የደረጃ ስርጭት <EpistemicTag kind="calc" /></div>
           <DistributionBar buckets={data.rating_distribution || []} />
         </div>
         <div className="card">
-          <div className="card-title">Team Snapshot <EpistemicTag kind="calc" /></div>
+          <div className="card-title">የቡድን አጭር እይታ <EpistemicTag kind="calc" /></div>
           {data.team.length === 0 ? (
-            <div className="empty-state">No direct reports assigned to this manager yet.</div>
+            <div className="empty-state">እስካሁን ለዚህ አስተዳዳሪ በቀጥታ የሚመሩ ሰራተኞች አልተመደቡም።</div>
           ) : (
             <div className="hbar-row" style={{ gridTemplateColumns: "1fr 90px", marginBottom: 8 }}>
-              <span className="hbar-label">Average open goals</span>
+              <span className="hbar-label">አማካይ ክፍት ግቦች</span>
               <span className="hbar-val">
                 {(data.team.reduce((s, t) => s + t.open_goals, 0) / data.team.length).toFixed(1)}
               </span>
             </div>
           )}
           <div className="hbar-row" style={{ gridTemplateColumns: "1fr 90px", marginBottom: 8 }}>
-            <span className="hbar-label">Benchmark: team vs org</span>
+            <span className="hbar-label">መነጻጸሪያ፦ ቡድን ከድርጅት ጋር</span>
             <span className="hbar-val">
               {data.average_score != null ? data.average_score.toFixed(1) : "—"}
               {data.organization_average != null ? ` / ${data.organization_average.toFixed(1)}` : ""}
             </span>
           </div>
           <div className="text-faint" style={{ fontSize: 12, lineHeight: 1.6 }}>
-            Averages are calculated from scored components (KPIs, goals, competencies, behavior, programs).
+            አማካዮች የሚሰሉት ከተሰጡ ነጥቦች (KPIዎች፣ ግቦች፣ ብቃቶች፣ ባህሪ እና ፕሮግራሞች) ነው።
           </div>
         </div>
       </div>
 
       <div className="card">
         <div className="card-title">
-          Direct Reports
-          <span className="chip chip-neutral">{data.team.length} people</span>
+          በቀጥታ የሚመሩ
+          <span className="chip chip-neutral">{data.team.length} ሰዎች</span>
         </div>
         {data.team.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">👥</div>
-            No direct reports found. Assign employees to this manager in Organization Setup.
+            በቀጥታ የሚመሩ ሰራተኞች አልተገኙም። በድርጅት መዋቅር ውስጥ ሰራተኞችን ለዚህ አስተዳዳሪ ይመድቡ።
           </div>
         ) : (
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Employee</th>
-                  <th className="num">Score</th>
-                  <th>Rating</th>
-                  <th className="num">Open Goals</th>
-                  <th>Status</th>
-                  <th>Assessment</th>
+                  <th>ሰራተኛ</th>
+                  <th className="num">ነጥብ</th>
+                  <th>ደረጃ</th>
+                  <th className="num">ክፍት ግቦች</th>
+                  <th>ሁኔታ</th>
+                  <th>ግምገማ</th>
                   <th className="num" />
                 </tr>
               </thead>
@@ -160,23 +229,23 @@ export default function TeamDashboard({ managerId }) {
                       <td className="num">{t.open_goals}</td>
                       <td>
                         {t.at_risk_goals > 0
-                          ? <span className="chip chip-danger">{t.at_risk_goals} at risk</span>
-                          : <span className="chip chip-success">on track</span>}
+                          ? <span className="chip chip-danger">{t.at_risk_goals} አደጋ ላይ</span>
+                          : <span className="chip chip-success">በመንገድ ላይ</span>}
                       </td>
                       <td>
                         {t.self_assessment_submitted
-                          ? <span className="chip chip-indigo">self ✓</span>
-                          : <span className="chip chip-neutral">self —</span>}{" "}
+                          ? <span className="chip chip-indigo">የራስ ✓</span>
+                          : <span className="chip chip-neutral">የራስ —</span>}{" "}
                         {t.manager_evaluation_submitted
-                          ? <span className="chip chip-success">manager ✓</span>
-                          : <span className="chip chip-warn">manager —</span>}
+                          ? <span className="chip chip-success">አስተዳዳሪ ✓</span>
+                          : <span className="chip chip-warn">አስተዳዳሪ —</span>}
                       </td>
                       <td className="num">
                         <button
                           className="btn btn-secondary btn-sm"
                           onClick={(e) => { e.stopPropagation(); setEvalTarget(t); }}
                         >
-                          <Icons.edit size={13} /> {t.manager_evaluation_submitted ? "Edit eval" : "Assess"}
+                          <Icons.edit size={13} /> {t.manager_evaluation_submitted ? "ግምገማ አርትዕ" : "ገምግም"}
                         </button>
                       </td>
                     </tr>

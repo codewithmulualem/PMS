@@ -130,3 +130,155 @@ def is_unit_descendant(db, candidate_unit_id, ancestor_unit_id):
         ).fetchone()
         current = row["parent_id"] if row else None
     return False
+
+
+# ---------------------------------------------------------------------------
+# Role-aware (tiered) approval chain
+# ---------------------------------------------------------------------------
+# A subject's chain climbs the org tree level by level and hands each step to
+# the *head* of the corresponding org unit:
+#   team member  -> team leader (L1) then department head (L2)   [depth 2]
+#   team leader  -> department head                               [depth 1]
+#   dept head    -> director                                      [depth 1]
+#   director     -> executive                                     [depth 1]
+#   executive    -> (none; auto-scored)                           [depth 0]
+# This replaces the purely-structural walk for evaluation approvals so that
+# reviews stay "within teams, signed off by the team lead then dept head".
+
+
+def _subject_role_name(db, employee_id):
+    """The subject's account role name (from the roles table), or None."""
+    row = db.execute(
+        "SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id "
+        "WHERE u.employee_id = ?", (employee_id,)
+    ).fetchone()
+    if row and row["name"]:
+        return row["name"]
+    # legacy fallback (users.role column)
+    row = db.execute(
+        "SELECT role FROM users WHERE employee_id = ?", (employee_id,)
+    ).fetchone()
+    return row["role"] if row else None
+
+
+def _unit_chain_up(db, employee_id):
+    """Ordered list of org units (their ids) from the subject's own unit up to
+    the root, deepest first (cycle-safe)."""
+    units = []
+    seen = set()
+    cur = db.execute(
+        "SELECT department_id FROM employees WHERE id = ?", (employee_id,)
+    ).fetchone()
+    cur = cur["department_id"] if cur else None
+    while cur is not None and cur not in seen:
+        seen.add(cur)
+        units.append(cur)
+        row = db.execute("SELECT parent_id FROM departments WHERE id = ?", (cur,)).fetchone()
+        cur = row["parent_id"] if row else None
+    return units
+
+
+def _unit_level_order(db, unit_id):
+    if not unit_id:
+        return None
+    row = db.execute(
+        "SELECT out.level_order FROM departments d "
+        "LEFT JOIN org_unit_types out ON out.id = d.unit_type_id "
+        "WHERE d.id = ?", (unit_id,)
+    ).fetchone()
+    return row["level_order"] if row else None
+
+
+def _parent_of(db, unit_id):
+    if not unit_id:
+        return None
+    row = db.execute("SELECT parent_id FROM departments WHERE id = ?", (unit_id,)).fetchone()
+    return row["parent_id"] if row else None
+
+
+def _subject_heads_own_unit(db, employee_id, unit_id):
+    """True when `employee_id` occupies the is_head position of `unit_id`."""
+    if not unit_id:
+        return False
+    row = db.execute(
+        "SELECT 1 FROM positions p JOIN employees e ON e.position_id = p.id "
+        "WHERE p.org_unit_id = ? AND p.is_head = 1 AND e.id = ? AND p.active = 1 "
+        "AND e.employment_status = 'active'",
+        (unit_id, employee_id),
+    ).fetchone()
+    return row is not None
+
+
+def _is_valid_approver(db, head_id):
+    """A legit approval node is a real supervisor, not a support-staff occupant
+    of an is_head position (e.g. a secretary 'heading' the executive office).
+
+    A head is valid if they carry a supervisor role, or hold a leadership
+    position title. Support titles (Secretary/Officer/Specialist/Analyst)
+    without a supervisor role are treated as non-approvers so the walk climbs
+    past them to the executive who actually signs off."""
+    row = db.execute(
+        "SELECT p.title AS pos_title FROM employees e JOIN positions p ON p.id = e.position_id "
+        "WHERE e.id = ?", (head_id,)
+    ).fetchone()
+    title = (row["pos_title"] or "") if row else ""
+    role = _subject_role_name(db, head_id)
+    if role in ("executive", "director", "dept_head", "team_leader", "manager", "admin"):
+        return True
+    lowered = title.lower()
+    if any(k in lowered for k in (
+        "director", "team leader", "director general", "head",
+        "deputy", "general manager", "chief",
+    )):
+        return True
+    return False
+
+
+def resolve_tier_chain(employee_id, db=None):
+    """An ordered list of approver ids (deepest first) for `employee_id`,
+    resolved by org-unit heads and capped by the subject's apparent tier.
+
+      team member  -> team leader then department head   [depth 2]
+      team leader  -> department head                    [depth 1]
+      dept head    -> director                           [depth 1]
+      director     -> executive                          [depth 1]
+      executive    -> []                                 [depth 0]
+
+    Support-staff occupants of unit-head positions (secretaries, etc.) are
+    skipped so the approval resolves to the real signing supervisor above.
+
+    Returns [] for apex/executive subjects (auto-scored on submission)."""
+    own_conn = db is None
+    db = db or get_db()
+    try:
+        role = _subject_role_name(db, employee_id)
+        units = _unit_chain_up(db, employee_id)
+        own_unit = units[0] if units else None
+        own_level = _unit_level_order(db, own_unit)
+
+        # Depth cap based on the subject's position in the hierarchy.
+        if role in ("dept_head", "director"):
+            depth = 1
+        elif own_level == 3:
+            # A team leader (even without an account) heads their own team -> 1
+            # further level; a plain team member -> team leader then dept head.
+            depth = 1 if _subject_heads_own_unit(db, employee_id, own_unit) else 2
+        elif own_level in (1, 2):
+            depth = 1
+        else:
+            depth = 0  # authority / apex / unknown
+
+        if depth <= 0:
+            return []
+
+        heads = []
+        for unit in units:
+            if len(heads) >= depth:
+                break
+            head = unit_head(unit, db=db)
+            if head and head["id"] != employee_id and _is_valid_approver(db, head["id"]):
+                heads.append(head["id"])
+        return heads
+    finally:
+        if own_conn:
+            db.close()

@@ -50,9 +50,9 @@ def relationship_types():
 
 
 @bp.get("/reference/demo-accounts")
-@roles_required("admin")
 def demo_accounts():
-    """Quick-fill credentials for admins (passwords omitted for security)."""
+    """Quick-fill credentials for the login page (public, passwords omitted for
+    security). Usernames here are already treated as public demo data."""
     db = get_db()
     try:
         rows = rows_to_list(db.execute(

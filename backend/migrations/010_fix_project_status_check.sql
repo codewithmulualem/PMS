@@ -25,5 +25,3 @@ DROP TABLE projects;
 ALTER TABLE projects_new RENAME TO projects;
 
 CREATE INDEX IF NOT EXISTS idx_projects_cycle ON projects(cycle_id);
-
-INSERT INTO schema_migrations (version) VALUES ('010');

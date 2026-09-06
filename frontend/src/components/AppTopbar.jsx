@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useCycle } from "../context/CycleContext";
 import AccountModal from "./AccountModal";
 import { Icons } from "./icons";
+import { ROLE_LABELS } from "../i18n";
 
 function initials(name = "") {
   return name.split(" ").filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join("");
@@ -37,7 +38,7 @@ export default function AppTopbar({ title, collapsed, onToggle }) {
         <button
           className={`topbar-burger ${collapsed ? "active" : ""}`}
           onClick={onToggle}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "የጎን ምናሌን ክፈት" : "የጎን ምናሌን ዝጋ"}
           aria-expanded={!collapsed}
         >
           <Icons.menu size={18} />
@@ -47,10 +48,10 @@ export default function AppTopbar({ title, collapsed, onToggle }) {
       <div className="topbar-right">
         {ready && cycles.length > 0 && (
           <div className="cycle-select">
-            <select value={cycleId || ""} onChange={(e) => select(Number(e.target.value))} aria-label="Performance cycle">
+            <select value={cycleId || ""} onChange={(e) => select(Number(e.target.value))} aria-label="የአፈጻጸም ዑደት">
               {cycles.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} {c.status === "active" ? "• active" : ""}
+                  {c.name} {c.status === "active" ? "• ንቁ" : ""}
                 </option>
               ))}
             </select>
@@ -67,7 +68,7 @@ export default function AppTopbar({ title, collapsed, onToggle }) {
             <div className="avatar avatar-sm">{initials(user.employee?.full_name || user.username)}</div>
             <div className="topbar-user-text">
               <div className="topbar-user-name">{user.employee?.full_name || user.username}</div>
-              <div className="topbar-user-role">{user.role}</div>
+              <div className="topbar-user-role">{ROLE_LABELS[user.role] || user.role}</div>
             </div>
             <Icons.chevronDown size={14} className="topbar-user-caret" />
           </button>
@@ -75,14 +76,14 @@ export default function AppTopbar({ title, collapsed, onToggle }) {
             <div className="topbar-user-dropdown" role="menu">
               <div className="dropdown-header">
                 <div className="dropdown-name">{user.employee?.full_name || user.username}</div>
-                <span className="role-pill">{user.role}</span>
+                <span className="role-pill">{ROLE_LABELS[user.role] || user.role}</span>
               </div>
               <button className="dropdown-item" role="menuitem"
                 onClick={() => { setOpen(false); setAccountOpen(true); }}>
-                <Icons.key size={14} /> <span>My account</span>
+                <Icons.key size={14} /> <span>የእኔ መለያ</span>
               </button>
               <button className="dropdown-item" role="menuitem" onClick={logout}>
-                <Icons.logout size={14} /> <span>Sign out</span>
+                <Icons.logout size={14} /> <span>ውጣ</span>
               </button>
             </div>
           )}

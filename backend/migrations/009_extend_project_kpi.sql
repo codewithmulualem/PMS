@@ -33,4 +33,3 @@ CREATE INDEX IF NOT EXISTS idx_task_kpis_task ON task_kpis(task_id);
 ALTER TABLE projects ADD COLUMN weight REAL DEFAULT 1;
 
 -- Record migration.
-INSERT INTO schema_migrations (version) VALUES ('009');

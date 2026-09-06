@@ -9,7 +9,7 @@ const LEVELS = 4; // concentric rings
 
 export default function RadarChart({ items, size = SIZE, currentColor = "var(--indigo)", targetColor = "var(--teal)" }) {
   if (!items || items.length < 3) {
-    return <div className="empty-state">Add at least three competencies to render a profile.</div>;
+    return <div className="empty-state">መገለጫውን ለማሳየት ቢያንስ ሦስት ብቃቶችን ይጨምሩ።</div>;
   }
 
   const angle = (i) => (Math.PI * 2 * i) / items.length - Math.PI / 2;
@@ -56,8 +56,8 @@ export default function RadarChart({ items, size = SIZE, currentColor = "var(--i
         })}
       </svg>
       <div className="chart-legend">
-        <span className="lg"><span className="swatch" style={{ background: "var(--indigo)" }} /> Current</span>
-        <span className="lg"><span className="swatch" style={{ background: "var(--teal)" }} /> Target</span>
+        <span className="lg"><span className="swatch" style={{ background: "var(--indigo)" }} /> የአሁኑ</span>
+        <span className="lg"><span className="swatch" style={{ background: "var(--teal)" }} /> ዒላማ</span>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { Icons } from "../icons";
 import { api } from "../../api";
 
 const DEFAULT_TYPES = ["primary", "secondary", "functional", "administrative", "acting", "temporary"];
+const RELATIONSHIP_LABELS = { primary: "ዋና", secondary: "ሁለተኛ", functional: "ተግባራዊ", administrative: "አስተዳደራዊ", acting: "ተጠባባቂ", temporary: "ጊዜያዊ" };
 const EMPTY = { employee_id: "", supervisor_id: "", relationship_type: "primary", start_date: "", end_date: "", reason: "" };
 
 export default function ReportingPanel({ relationships, employees, onChanged, toast, canEdit }) {
@@ -24,10 +25,10 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
     try {
       if (editingId) {
         await api.put(`/org/reporting-relationships/${editingId}`, form);
-        toast.push("Relationship updated", "success");
+        toast.push("ግንኙነቱ ተሻሽሏል", "success");
       } else {
         await api.post("/org/reporting-relationships", form);
-        toast.push("Reporting relationship added", "success");
+        toast.push("የሪፖርት ግንኙነቱ ተጨምሯል", "success");
       }
       setForm(EMPTY);
       setEditingId(null);
@@ -52,7 +53,7 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
   async function toggleActive(r) {
     try {
       await api.put(`/org/reporting-relationships/${r.id}`, { is_active: r.is_active ? 0 : 1 });
-      toast.push(r.is_active ? "Relationship retired" : "Relationship activated", "success");
+      toast.push(r.is_active ? "ግንኙነቱ ጡረታ ወጥቷል" : "ግንኙነቱ ነቅቷል", "success");
       onChanged();
     } catch (err) {
       toast.push(err.message, "error");
@@ -60,10 +61,10 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
   }
 
   async function remove(r) {
-    if (!window.confirm("Delete this reporting relationship?")) return;
+    if (!window.confirm("ይህ የሪፖርት ግንኙነት ይሰረዝ?")) return;
     try {
       await api.delete(`/org/reporting-relationships/${r.id}`);
-      toast.push("Relationship deleted", "success");
+      toast.push("ግንኙነቱ ተሰርዟል", "success");
       onChanged();
     } catch (err) {
       toast.push(err.message, "error");
@@ -73,29 +74,27 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
   return (
     <div>
       <div className="text-faint" style={{ fontSize: 12.5, lineHeight: 1.6, marginBottom: 14 }}>
-        The <b>primary</b> relationship drives the chain of command and approvals. Secondary / functional /
-        administrative / acting / temporary relationships support matrix and temp structures. Only one primary
-        is active at a time; creating a new one retires the previous.
+        <b>ዋና</b> ግንኙነት የትዕዛዝ ሰንሰለቱንና ማጽደቆችን ይመራል። ሁለተኛ፣ ተግባራዊ፣ አስተዳደራዊ፣ ተጠባባቂ እና ጊዜያዊ ግንኙነቶች የማትሪክስ እና ጊዜያዊ መዋቅሮችን ይደግፋሉ። በአንድ ጊዜ አንድ ዋና ግንኙነት ብቻ ንቁ ይሆናል።
       </div>
       <div className="grid grid-2">
         <div className="card">
-          <div className="card-title">{editingId ? "Edit relationship" : "Add reporting relationship"}</div>
+          <div className="card-title">{editingId ? "ግንኙነት አርትዕ" : "የሪፖርት ግንኙነት ጨምር"}</div>
           {canEdit ? (
             <form onSubmit={save}>
               <div className="form-grid">
                 <div className="field">
-                  <label>Employee</label>
+                  <label>ሰራተኛ</label>
                   <select required value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: Number(e.target.value) })}>
-                    <option value="">— select —</option>
+                    <option value="">— ይምረጡ —</option>
                     {employees.map((emp) => (
                       <option key={emp.id} value={emp.id}>{emp.full_name}</option>
                     ))}
                   </select>
                 </div>
                 <div className="field">
-                  <label>Supervisor</label>
+                  <label>አስተዳዳሪ</label>
                   <select required value={form.supervisor_id} onChange={(e) => setForm({ ...form, supervisor_id: Number(e.target.value) })}>
-                    <option value="">— select —</option>
+                    <option value="">— ይምረጡ —</option>
                     {employees.filter((emp) => emp.id !== form.employee_id).map((emp) => (
                       <option key={emp.id} value={emp.id}>{emp.full_name}</option>
                     ))}
@@ -103,37 +102,37 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
                 </div>
               </div>
               <div className="field">
-                <label>Type</label>
+                <label>ዓይነት</label>
                 <select value={form.relationship_type} onChange={(e) => setForm({ ...form, relationship_type: e.target.value })}>
-                  {types.map((t) => <option key={t} value={t}>{t}</option>)}
+                  {types.map((t) => <option key={t} value={t}>{RELATIONSHIP_LABELS[t] || t}</option>)}
                 </select>
               </div>
               <div className="form-grid">
                 <div className="field">
-                  <label>Start date</label>
+                  <label>የመጀመሪያ ቀን</label>
                   <input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} />
                 </div>
                 <div className="field">
-                  <label>End date (optional)</label>
+                  <label>የመጨረሻ ቀን (አማራጭ)</label>
                   <input type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} />
                 </div>
               </div>
               <div className="field">
-                <label>Reason</label>
-                <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Product alignment working group" />
+                <label>ምክንያት</label>
+                <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="ለምሳሌ፦ የሥራ ተግባር ማስማማት ቡድን" />
               </div>
               <div className="flex gap-8">
-                <button className="btn btn-primary btn-sm" type="submit"><Icons.plus size={13} /> {editingId ? "Save" : "Add"}</button>
-                {editingId && <button type="button" className="btn btn-sm" onClick={() => { setEditingId(null); setForm(EMPTY); }}>Cancel</button>}
+                <button className="btn btn-primary btn-sm" type="submit"><Icons.plus size={13} /> {editingId ? "አስቀምጥ" : "ጨምር"}</button>
+                {editingId && <button type="button" className="btn btn-sm" onClick={() => { setEditingId(null); setForm(EMPTY); }}>ሰርዝ</button>}
               </div>
             </form>
           ) : (
-            <div className="empty-state">Only admins can edit reporting relationships.</div>
+            <div className="empty-state">የሪፖርት ግንኙነቶችን ማርትዕ የሚችሉት አስተዳዳሪዎች ብቻ ናቸው።</div>
           )}
         </div>
         <div className="card">
-          <div className="card-title">Relationships</div>
-          {sorted.length === 0 && <div className="empty-state">No reporting relationships yet.</div>}
+          <div className="card-title">ግንኙነቶች</div>
+          {sorted.length === 0 && <div className="empty-state">እስካሁን የሪፖርት ግንኙነት የለም።</div>}
           {sorted.map((r) => (
             <div key={r.id} className="flex-between" style={{ padding: "10px 2px", borderBottom: "1px solid #f0f2f7" }}>
               <div style={{ minWidth: 0 }}>
@@ -141,17 +140,17 @@ export default function ReportingPanel({ relationships, employees, onChanged, to
                   {r.employee_name} <span className="text-faint">→</span> {r.supervisor_name}
                 </div>
                 <div className="cell-sub">
-                  <span className={`chip ${r.is_active ? "chip-success" : "chip-neutral"}`}>{r.relationship_type}</span>
-                  {r.is_active ? <span className="text-faint" style={{ marginLeft: 8 }}>active</span> : <span className="text-faint" style={{ marginLeft: 8 }}>retired</span>}
+                  <span className={`chip ${r.is_active ? "chip-success" : "chip-neutral"}`}>{RELATIONSHIP_LABELS[r.relationship_type] || r.relationship_type}</span>
+                  {r.is_active ? <span className="text-faint" style={{ marginLeft: 8 }}>ንቁ</span> : <span className="text-faint" style={{ marginLeft: 8 }}>ጡረታ ወጥቷል</span>}
                   {(r.start_date || r.end_date) && <span className="mono text-faint" style={{ marginLeft: 8, fontSize: 11.5 }}>{r.start_date || "…"} → {r.end_date || "…"}</span>}
                   {r.reason && <div className="text-faint" style={{ fontSize: 11.5, marginTop: 3 }}>{r.reason}</div>}
                 </div>
               </div>
               {canEdit && (
                 <div className="tree-actions">
-                  <button title="Toggle active" onClick={() => toggleActive(r)}><Icons.check size={14} /></button>
-                  <button title="Edit" onClick={() => startEdit(r)}><Icons.edit size={14} /></button>
-                  <button title="Delete" onClick={() => remove(r)}><Icons.trash size={14} /></button>
+                  <button title="ንቁ/ንቁ አይደለም ቀይር" onClick={() => toggleActive(r)}><Icons.check size={14} /></button>
+                  <button title="አርትዕ" onClick={() => startEdit(r)}><Icons.edit size={14} /></button>
+                  <button title="ሰርዝ" onClick={() => remove(r)}><Icons.trash size={14} /></button>
                 </div>
               )}
             </div>

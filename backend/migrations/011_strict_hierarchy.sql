@@ -36,5 +36,3 @@ END;
 
 -- 3. Track who made the assignment (delegation chain).
 ALTER TABLE project_tasks ADD COLUMN assigned_by INTEGER REFERENCES employees(id);
-
-INSERT INTO schema_migrations (version) VALUES ('011');

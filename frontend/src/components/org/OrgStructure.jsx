@@ -14,11 +14,11 @@ import TransferModal from "./TransferModal";
 import { Icons } from "../icons";
 
 const SUB_TABS = [
-  { key: "units", label: "Units" },
-  { key: "levels", label: "Level Types" },
-  { key: "positions", label: "Positions" },
-  { key: "reporting", label: "Reporting" },
-  { key: "chart", label: "Org Chart" },
+  { key: "units", label: "ክፍሎች" },
+  { key: "levels", label: "የደረጃ ዓይነቶች" },
+  { key: "positions", label: "የሥራ መደቦች" },
+  { key: "reporting", label: "ሪፖርት ማቅረብ" },
+  { key: "chart", label: "የድርጅት ሰንጠረዥ" },
 ];
 
 function flatten(nodes) {
@@ -89,7 +89,7 @@ export default function OrgStructure() {
   async function moveUnit(unitId, parentId) {
     try {
       await api.post(`/org/units/${unitId}/move`, { parent_id: parentId, override: overrideEnabled });
-      toast.push("Unit moved", "success");
+      toast.push("ክፍሉ ተንቀሳቅሷል", "success");
       await load();
     } catch (err) {
       toast.push(err.message, "error");
@@ -97,10 +97,10 @@ export default function OrgStructure() {
   }
 
   async function deleteUnit(unit) {
-    if (!window.confirm(`Delete "${unit.name}"? This only works for empty units.`)) return;
+    if (!window.confirm(`“${unit.name}” ይሰረዝ? ባዶ ክፍሎች ብቻ ሊሰረዙ ይችላሉ።`)) return;
     try {
       await api.delete(`/org/units/${unit.id}`);
-      toast.push(`"${unit.name}" deleted`, "success");
+      toast.push(`“${unit.name}” ተሰርዟል`, "success");
       if (selected?.id === unit.id) setSelected(null);
       await load();
     } catch (err) {
@@ -126,10 +126,10 @@ export default function OrgStructure() {
                 checked={overrideEnabled}
                 onChange={(e) => setOverrideEnabled(e.target.checked)}
               />
-              allow matrix drops
+              የደረጃ ቅደም ተከተል መዝለል ፍቀድ
             </label>
             <button className="btn btn-primary btn-sm" onClick={() => setUnitModal({ mode: "create", parent: null })}>
-              <Icons.plus size={14} /> New root unit
+              <Icons.plus size={14} /> አዲስ ዋና ክፍል
             </button>
           </div>
         )}
@@ -138,17 +138,17 @@ export default function OrgStructure() {
       {error && <div className="error-banner">{error}</div>}
 
       {loading ? (
-        <Skeleton rows={6} />
+        <Skeleton lines={6} />
       ) : (
         <>
           {tab === "units" && (
             <div className="grid grid-2">
               <div className="card">
                 <div className="card-title">
-                  Org Structure <EpistemicTag kind="fact" />
+                  የድርጅት መዋቅር <EpistemicTag kind="fact" />
                 </div>
                 <div className="text-faint" style={{ fontSize: 12, marginBottom: 10 }}>
-                  {canEdit ? "Drag a unit onto another to reparent it. Click a unit to inspect it." : "Read-only view."}
+                  {canEdit ? "አንድን ክፍል በሌላ ላይ በመጎተት ወላጅ ክፍሉን ይቀይሩ። ዝርዝሩን ለማየት ክፍሉን ይጫኑ።" : "ለማንበብ ብቻ የተፈቀደ እይታ።"}
                 </div>
                 <OrgTree
                   tree={tree}
@@ -164,48 +164,48 @@ export default function OrgStructure() {
               </div>
               <div className="card">
                 <div className="card-title">
-                  {selectedUnit ? selectedUnit.name : "Select a unit"}
+                  {selectedUnit ? selectedUnit.name : "ክፍል ይምረጡ"}
                   {selectedUnit?.code && <span className="mono text-faint" style={{ marginLeft: 8, fontSize: 12 }}>{selectedUnit.code}</span>}
                 </div>
                 {selectedUnit ? (
                   <>
                     <div className="unit-meta">
                       <div>
-                        <div className="cell-sub">Level type</div>
+                        <div className="cell-sub">የደረጃ ዓይነት</div>
                         <div className="cell-strong">{selectedUnit.unit_type_name || "—"}</div>
                       </div>
                       <div>
-                        <div className="cell-sub">Head</div>
+                        <div className="cell-sub">ኃላፊ</div>
                         <div className="cell-strong">{selectedUnit.head ? selectedUnit.head.full_name : "—"}</div>
                       </div>
                       <div>
-                        <div className="cell-sub">People</div>
+                        <div className="cell-sub">ሰዎች</div>
                         <div className="cell-strong">{selectedUnit.employee_count}</div>
                       </div>
                       <div>
-                        <div className="cell-sub">Positions</div>
+                        <div className="cell-sub">የሥራ መደቦች</div>
                         <div className="cell-strong">{selectedUnit.position_count}</div>
                       </div>
                     </div>
                     <div className="divider" />
-                    <div className="card-title" style={{ marginTop: 10 }}>People in this unit</div>
-                    {unitEmployees.length === 0 && <div className="empty-state">No employees assigned to this unit.</div>}
+                    <div className="card-title" style={{ marginTop: 10 }}>በዚህ ክፍል ያሉ ሰዎች</div>
+                    {unitEmployees.length === 0 && <div className="empty-state">ለዚህ ክፍል ምንም ሰራተኛ አልተመደበም።</div>}
                     {unitEmployees.map((e) => (
                       <div key={e.id} className="flex-between" style={{ padding: "8px 2px", borderBottom: "1px solid #f0f2f7" }}>
                         <div>
                           <div className="cell-strong" style={{ fontSize: 13 }}>{e.full_name}</div>
-                          <div className="cell-sub">{e.position || e.job_grade || "no role"}</div>
+                          <div className="cell-sub">{e.position || e.job_grade || "የሥራ መደብ የለም"}</div>
                         </div>
                         {canEdit && (
-                          <button className="btn btn-sm" title="Transfer employee" onClick={() => setTransfer(e)}>
-                            <Icons.swap size={13} /> Transfer
+                          <button className="btn btn-sm" title="ሰራተኛውን አዛውር" onClick={() => setTransfer(e)}>
+                            <Icons.swap size={13} /> አዛውር
                           </button>
                         )}
                       </div>
                     ))}
                   </>
                 ) : (
-                  <div className="empty-state">Select a unit to see its details, head, and people.</div>
+                  <div className="empty-state">ዝርዝሩን፣ ኃላፊውን እና ሰራተኞቹን ለማየት ክፍል ይምረጡ።</div>
                 )}
               </div>
             </div>
@@ -230,7 +230,17 @@ export default function OrgStructure() {
             <ReportingPanel relationships={relationships} employees={employees} onChanged={load} toast={toast} canEdit={canEdit} />
           )}
 
-          {tab === "chart" && <OrgChart tree={tree} people={peopleTree} />}
+          {tab === "chart" && (
+            <OrgChart
+              tree={tree}
+              people={peopleTree}
+              units={flatUnits}
+              employees={employees}
+              unitTypes={unitTypes}
+              positions={positions}
+              relationships={relationships}
+            />
+          )}
         </>
       )}
 

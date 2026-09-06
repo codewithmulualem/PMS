@@ -19,13 +19,17 @@ def _log(db, entity_type, entity_id, action, old_value=None, new_value=None):
 
 def _check_evaluator_allowed(data, evaluator_type, db):
     """Enforces who may act as which evaluator type."""
+    if evaluator_type not in ("self", "manager", "peer", "subordinate"):
+        return "evaluator_type must be self, manager, peer, or subordinate"
     employee_id = data["employee_id"]
+    if not db.execute("SELECT 1 FROM employees WHERE id=?", (employee_id,)).fetchone():
+        return "target employee not found"
     if evaluator_type == "self" and g.user["employee_id"] != employee_id:
         return "Only the employee can submit their own self-assessment"
     if evaluator_type == "manager":
-        if g.user["role"] not in ("manager", "admin", "executive"):
+        if g.user["role"] not in ("director", "dept_head", "team_leader", "manager", "admin", "executive"):
             return "Forbidden: only managers may submit manager assessments"
-        if g.user["role"] == "manager" and not can_view_employee(g.user, employee_id, db=db):
+        if g.user["role"] in ("director", "dept_head", "team_leader", "manager") and not can_view_employee(g.user, employee_id, db=db):
             return "Forbidden: not your report"
         # Admins/executives may review their direct reports or any top-of-tree
         # leader (manager_id is NULL). The latter keeps cross-review of the org
@@ -40,9 +44,41 @@ def _check_evaluator_allowed(data, evaluator_type, db):
             is_top_of_tree = row["manager_id"] is None
             if not (is_report or is_top_of_tree):
                 return "Forbidden: can only evaluate your direct reports or top-of-tree leaders"
-    if evaluator_type in ("peer", "subordinate") and g.user["role"] not in ("manager", "admin", "executive"):
-        return "Forbidden: insufficient role for peer/subordinate assessment"
+    if evaluator_type == "subordinate":
+        if g.user["role"] not in ("director", "dept_head", "team_leader", "manager", "admin", "executive"):
+            return "Forbidden: insufficient role for subordinate assessment"
+        if g.user["role"] in ("director", "dept_head", "team_leader", "manager"):
+            if not can_view_employee(g.user, employee_id, db=db):
+                return "Forbidden: target is outside your reporting scope"
+            subordinate = db.execute(
+                "SELECT manager_id FROM employees WHERE id=?", (employee_id,)
+            ).fetchone()
+            if not subordinate or subordinate["manager_id"] != g.user.get("employee_id"):
+                return "Forbidden: target is not your direct subordinate"
+        elif g.user["role"] in ("admin", "executive"):
+            target = db.execute("SELECT id FROM employees WHERE id=?", (employee_id,)).fetchone()
+            if not target:
+                return "Forbidden: target employee not found"
     return None
+
+
+def _validated_score(value, field):
+    if value is None or value == "":
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field} must be numeric")
+    if not 0 <= numeric <= 100:
+        raise ValueError(f"{field} must be between 0 and 100")
+    return numeric
+
+
+def _validated_status(value):
+    status = value or "submitted"
+    if status not in ("draft", "submitted", "rejected"):
+        raise ValueError("status must be draft, submitted, or rejected")
+    return status
 
 
 @bp.get("/evaluations")
@@ -71,6 +107,12 @@ def submit_evaluation():
 
     db = get_db()
     try:
+        try:
+            behavior_score = _validated_score(data.get("behavior_score"), "behavior_score")
+            program_score = _validated_score(data.get("program_score", data.get("project_score")), "program_score")
+            status = _validated_status(data.get("status"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         blocked = _check_evaluator_allowed(data, data["evaluator_type"], db)
         if blocked:
             return jsonify({"error": blocked}), 403
@@ -81,21 +123,19 @@ def submit_evaluation():
         ).fetchone()
         if existing:
             db.execute(
-                "UPDATE evaluations SET behavior_score=?, project_score=?, comments=?, "
+                "UPDATE evaluations SET behavior_score=?, program_score=?, comments=?, "
                 "status=?, submitted_at=datetime('now') WHERE id=?",
-                (data.get("behavior_score"), data.get("project_score"), data.get("comments"),
-                 data.get("status", "submitted"), existing["id"]),
+                (behavior_score, program_score, data.get("comments"), status, existing["id"]),
             )
             _log(db, "evaluation", existing["id"], "update", new_value=data)
             db.commit()
             return jsonify({"id": existing["id"]})
         cur = db.execute(
             "INSERT INTO evaluations (employee_id, cycle_id, evaluator_id, evaluator_type, behavior_score, "
-            "project_score, comments, status, submitted_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'))",
+            "program_score, comments, status, submitted_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'))",
             (
                 data["employee_id"], data["cycle_id"], g.user.get("employee_id"), data["evaluator_type"],
-                data.get("behavior_score"), data.get("project_score"), data.get("comments"),
-                data.get("status", "submitted"),
+                behavior_score, program_score, data.get("comments"), status,
             ),
         )
         _log(db, "evaluation", cur.lastrowid, "create", new_value=data)
@@ -118,8 +158,19 @@ def update_evaluation(evaluation_id):
         is_admin = g.user["role"] in ("admin", "executive")
         if not (is_owner or is_admin):
             return jsonify({"error": "Forbidden"}), 403
-        fields = ["behavior_score", "project_score", "comments", "status"]
+        fields = ["behavior_score", "program_score", "project_score", "comments", "status"]
         updates = {f: data[f] for f in fields if f in data}
+        try:
+            if "behavior_score" in updates:
+                updates["behavior_score"] = _validated_score(updates["behavior_score"], "behavior_score")
+            if "project_score" in updates and "program_score" not in updates:
+                updates["program_score"] = updates.pop("project_score")
+            if "program_score" in updates:
+                updates["program_score"] = _validated_score(updates["program_score"], "program_score")
+            if "status" in updates:
+                updates["status"] = _validated_status(updates["status"])
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
         if updates:
             set_clause = ", ".join(f"{k}=?" for k in updates) + ", submitted_at=datetime('now')"
             db.execute(f"UPDATE evaluations SET {set_clause} WHERE id=?", (*updates.values(), evaluation_id))
@@ -133,8 +184,9 @@ def update_evaluation(evaluation_id):
 @bp.get("/managers/<int:manager_id>/evaluations")
 @login_required
 def manager_evaluations(manager_id):
-    if g.user["role"] not in ("admin", "manager", "executive") or (
-        g.user["role"] == "manager" and g.user["employee_id"] != manager_id
+    EVAL_ROLES = ("admin", "director", "dept_head", "team_leader", "executive")
+    if g.user["role"] not in EVAL_ROLES or (
+        g.user["role"] in ("director", "dept_head", "team_leader", "executive") and g.user["employee_id"] != manager_id
     ):
         return jsonify({"error": "Forbidden"}), 403
     db = get_db()

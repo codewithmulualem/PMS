@@ -66,8 +66,16 @@ class TestRoleEnforcement:
         s, d = jpost(client, "/api/programs/activities/1/kpis", {"name": "Nope", "kpi_type": "percentage"}, tok)
         assert s == 403
 
-    def test_manager_can_create_program(self, client):
+    def test_manager_blocked_from_create_program(self, client):
         tok = login(client, "manager1")
+        s, d = jpost(client, "/api/programs", {"name": "OK"}, tok)
+        assert s == 403
+
+    def test_director_can_create_program(self, client):
+        # Director accounts are seeded by the tier-tree builder (not minimal).
+        from test_plan_performance import _build_tier_tree
+        _build_tier_tree(client)
+        tok = login(client, "director1")
         s, d = jpost(client, "/api/programs", {"name": "OK"}, tok)
         assert s == 201
 
@@ -83,16 +91,16 @@ class TestRoleEnforcement:
 
 
 class TestDemoAccountsEndpoint:
-    def test_admin_can_access(self, client):
-        tok = login(client, "admin1")
-        s, d = jget(client, "/api/reference/demo-accounts", tok)
+    def test_anonymous_public_access(self, client):
+        # Endpoint is public so the login page can show quick-fill before login.
+        s, d = jget(client, "/api/reference/demo-accounts")
         assert s == 200
         assert isinstance(d, list)
 
-    def test_manager_blocked(self, client):
+    def test_any_authed_user_can_access(self, client):
         tok = login(client, "manager1")
         s, d = jget(client, "/api/reference/demo-accounts", tok)
-        assert s == 403
+        assert s == 200
 
     def test_no_passwords_exposed(self, client):
         tok = login(client, "admin1")

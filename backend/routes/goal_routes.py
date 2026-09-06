@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, request, jsonify, g
 
 from database import get_db, rows_to_list, row_to_dict
-from auth import login_required, roles_required, can_view_employee
+from auth import login_required, roles_required, can_view_employee, SUPERVISOR_ROLES
 
 bp = Blueprint("goal_routes", __name__, url_prefix="/api/goals")
 
@@ -37,13 +37,13 @@ def list_goals():
 
 
 @bp.post("")
-@roles_required("admin", "manager")
+@roles_required("admin", *SUPERVISOR_ROLES)
 def create_goal():
     data = request.get_json(force=True) or {}
     required = ["employee_id", "title"]
     if any(not data.get(f) for f in required):
         return jsonify({"error": f"required: {required}"}), 400
-    if g.user["role"] == "manager" and not can_view_employee(g.user, data["employee_id"]):
+    if g.user["role"] in SUPERVISOR_ROLES and not can_view_employee(g.user, data["employee_id"]):
         return jsonify({"error": "Forbidden: not your report"}), 403
     db = get_db()
     try:
@@ -77,7 +77,7 @@ def update_goal(goal_id):
             return jsonify({"error": "Not found"}), 404
 
         is_owner = g.user["employee_id"] == goal["employee_id"]
-        is_manager = g.user["role"] == "manager" and can_view_employee(g.user, goal["employee_id"])
+        is_manager = g.user["role"] in SUPERVISOR_ROLES and can_view_employee(g.user, goal["employee_id"])
         is_admin = g.user["role"] == "admin"
         if not (is_owner or is_manager or is_admin):
             return jsonify({"error": "Forbidden"}), 403

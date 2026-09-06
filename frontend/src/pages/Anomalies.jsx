@@ -23,7 +23,7 @@ export default function AnomaliesPage() {
 
   return (
     <div>
-      <Topbar subtitle={`Flags for ${current?.name || "the selected cycle"} — for human review only`} />
+      <Topbar subtitle={`የ${current?.name || "የተመረጠው ዑደት"} ምልክቶች — ለሰው ግምገማ ብቻ`} />
 
       {error && <div className="error-banner">{error}</div>}
 
@@ -31,34 +31,34 @@ export default function AnomaliesPage() {
         <div className="flex gap-8">
           <Icons.shield size={18} style={{ color: "var(--amber)", flexShrink: 0 }} />
           <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-            <b>AI is advisory, never decisive.</b> Signals below are statistical patterns that <em>may</em> warrant attention.
-            They are not accusations and they never change a score. Investigate, calibrate, and act as a human decision-maker.
+            <b>AI አማካሪ ነው፣ ውሳኔ ሰጪ አይደለም።</b> ከታች ያሉት ምልክቶች ትኩረት ሊፈልጉ የሚችሉ ስታቲስቲካዊ አዝማሚያዎች ናቸው።
+            ክስ አይደሉም እና ነጥብን በፍጹም አይቀይሩም። ይመርምሩ፣ ያስተካክሉ እና እንደ ሰው ውሳኔ ሰጪ ይወስኑ።
           </div>
         </div>
       </div>
 
       {!cycleId ? (
-        <div className="card"><div className="empty-state">Select a performance cycle to scan for anomaly signals.</div></div>
+        <div className="card"><div className="empty-state">የማስጠንቀቂያ ምልክቶችን ለመፈለግ የአፈጻጸም ዑደት ይምረጡ።</div></div>
       ) : signals === null && !error ? (
         <Skeleton lines={5} height={18} />
       ) : (
         <div className="card">
           <div className="card-title">
-            Detected signals
-            <span className="chip chip-neutral">{(signals || []).length} found</span>
+            የተገኙ ምልክቶች
+            <span className="chip chip-neutral">{(signals || []).length} ተገኝተዋል</span>
           </div>
           {(signals || []).length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">✓</div>
-              No anomaly signals detected in this cycle.
-              <div style={{ marginTop: 6, fontSize: 12 }}>Identical-score patterns and &gt;25pt swings vs the prior cycle are the current heuristics.</div>
+              በዚህ ዑደት ምንም የማስጠንቀቂያ ምልክት አልተገኘም።
+              <div style={{ marginTop: 6, fontSize: 12 }}>ተመሳሳይ ነጥብ እና ከቀደመው ዑደት የ25 ነጥብ በላይ ለውጥ የአሁኑ መመዘኛዎች ናቸው።</div>
             </div>
           ) : (
             signals.map((s, i) => (
               <div key={i} className="insight-card anomaly">
                 <div className="insight-head">
                   <EpistemicTag kind="risk" />
-                  <span className="mono" style={{ fontSize: 11, color: "var(--text-faint)" }}>signal #{i + 1}</span>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--text-faint)" }}>ምልክት #{i + 1}</span>
                 </div>
                 <div>{s.content}</div>
                 {s.supporting_data && (

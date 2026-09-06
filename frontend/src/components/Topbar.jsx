@@ -6,7 +6,7 @@ export default function Topbar({ title, subtitle, onBack, backLabel, children })
       <div className="topbar-title">
         {onBack && (
           <button className="back-btn" onClick={onBack}>
-            <Icons.chevronLeft size={15} /> {backLabel || "Back"}
+            <Icons.chevronLeft size={15} /> {backLabel || "ተመለስ"}
           </button>
         )}
         <div>

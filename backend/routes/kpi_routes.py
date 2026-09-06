@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, request, jsonify, g
 
 from database import get_db, rows_to_list, row_to_dict
-from auth import login_required, roles_required, can_view_employee
+from auth import login_required, roles_required, can_view_employee, SUPERVISOR_ROLES
 
 bp = Blueprint("kpi_routes", __name__, url_prefix="/api/kpis")
 
@@ -37,13 +37,13 @@ def list_kpis():
 
 
 @bp.post("")
-@roles_required("admin", "manager")
+@roles_required("admin", *SUPERVISOR_ROLES)
 def create_kpi():
     data = request.get_json(force=True) or {}
     required = ["employee_id", "name"]
     if any(not data.get(f) for f in required):
         return jsonify({"error": f"required: {required}"}), 400
-    if g.user["role"] == "manager" and not can_view_employee(g.user, data["employee_id"]):
+    if g.user["role"] in SUPERVISOR_ROLES and not can_view_employee(g.user, data["employee_id"]):
         return jsonify({"error": "Forbidden: not your report"}), 403
     db = get_db()
     try:
@@ -66,7 +66,7 @@ def create_kpi():
 
 
 @bp.put("/<int:kpi_id>")
-@roles_required("admin", "manager")
+@roles_required("admin", *SUPERVISOR_ROLES)
 def update_kpi(kpi_id):
     data = request.get_json(force=True) or {}
     db = get_db()
@@ -74,7 +74,7 @@ def update_kpi(kpi_id):
         kpi = db.execute("SELECT * FROM kpis WHERE id=?", (kpi_id,)).fetchone()
         if not kpi:
             return jsonify({"error": "Not found"}), 404
-        if g.user["role"] == "manager" and not can_view_employee(g.user, kpi["employee_id"]):
+        if g.user["role"] in SUPERVISOR_ROLES and not can_view_employee(g.user, kpi["employee_id"]):
             return jsonify({"error": "Forbidden"}), 403
         fields = ["name", "definition", "measurement_unit", "target_value", "min_acceptable_value",
                   "stretch_value", "actual_value", "weight", "direction", "frequency", "cycle_id"]

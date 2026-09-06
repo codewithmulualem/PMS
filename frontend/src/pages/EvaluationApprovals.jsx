@@ -14,11 +14,11 @@ function initials(name = "") {
 }
 
 const AVATAR_COLORS = ["#4c5fd5", "#0e8f7e", "#b17a17", "#d64545", "#2f9e44", "#7c5cd5"];
-const APPROVER_LABEL = { 1: "immediate manager", 2: "manager's manager", 3: "third level" };
-const PERSPECTIVE_LABEL = { self: "self review", manager: "manager review", peer: "peer review" };
+const APPROVER_LABEL = { 1: "ቀጥተኛ አስተዳዳሪ", 2: "የአስተዳዳሪ አስተዳዳሪ", 3: "ሦስተኛ ደረጃ" };
+const PERSPECTIVE_LABEL = { self: "የራስ ግምገማ", manager: "የአስተዳዳሪ ግምገማ", peer: "የባልደረባ ግምገማ" };
 
 function levelText(a) {
-  if (a.multi_approval) return "top executive sign-off";
+  if (a.multi_approval) return "የከፍተኛ አስፈፃሚ ማጽደቅ";
   return APPROVER_LABEL[a.next_level] || `level ${a.next_level}`;
 }
 
@@ -48,30 +48,35 @@ export default function EvaluationApprovals() {
 
   return (
     <div>
-      <Topbar subtitle="Approval depth follows the org hierarchy — leaves need more approvals, root reviews are scored on submission" />
+      <Topbar subtitle="የማጽደቅ ደረጃ የድርጅት መዋቅሩን ይከተላል — የታችኛው ደረጃ ተጨማሪ ማጽደቅ ይፈልጋል" />
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="error-banner">
+          {error}
+          <button className="link-btn" onClick={load}>እንደገና ሞክር</button>
+        </div>
+      )}
 
       {pending === null && !error ? (
         <Skeleton lines={4} height={26} />
-      ) : pending.length === 0 ? (
+      ) : (pending || []).length === 0 ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-icon">✓</div>
-            Nothing awaiting your approval right now.
-            <div style={{ marginTop: 6, fontSize: 12 }}>Submitted employee forms route to you automatically, level by level.</div>
+            አሁን የእርስዎን ማጽደቅ የሚጠብቅ ነገር የለም።
+            <div style={{ marginTop: 6, fontSize: 12 }}>የቀረቡ የሰራተኛ ቅጾች ደረጃ በደረጃ በራስ-ሰር ወደ እርስዎ ይመጣሉ።</div>
           </div>
         </div>
       ) : (
         <div className="card">
           <div className="card-title">
-            Awaiting Your Review
-            <span className="chip chip-warn">{pending.length} pending</span>
+            የእርስዎን ግምገማ የሚጠብቁ
+            <span className="chip chip-warn">{pending.length} በመጠባበቅ ላይ</span>
           </div>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Employee</th><th>Form</th><th>Cycle</th><th>Level</th><th className="num" /></tr>
+                <tr><th>ሰራተኛ</th><th>ቅጽ</th><th>ዑደት</th><th>ደረጃ</th><th className="num" /></tr>
               </thead>
               <tbody>
                 {pending.map((a) => (
@@ -91,7 +96,7 @@ export default function EvaluationApprovals() {
                       <div className="cell-strong">{a.form_name}</div>
                       <div className="cell-sub">
                         <span className={`chip perspective-chip chip-${a.evaluator_type}`}>{PERSPECTIVE_LABEL[a.evaluator_type] || a.evaluator_type}</span>
-                        {a.evaluator_name && ` by ${a.evaluator_name}`}
+                        {a.evaluator_name && ` በ ${a.evaluator_name}`}
                       </div>
                     </td>
                     <td>{a.cycle_name}</td>
@@ -100,12 +105,12 @@ export default function EvaluationApprovals() {
                       <span className="text-faint" style={{ fontSize: 11 }}>{levelText(a)}</span>
                       {a.multi_approval && (
                         <div className="cell-sub" style={{ marginTop: 2 }}>
-                          <span className="chip chip-gold">top sign-off {(a.approved_approver_ids || []).length}/{(a.required_approvers || []).length}</span>
+                          <span className="chip chip-gold">የከፍተኛ ደረጃ ማጽደቅ {(a.approved_approver_ids || []).length}/{(a.required_approvers || []).length}</span>
                         </div>
                       )}
                     </td>
                     <td className="num">
-                      <button className="btn btn-secondary btn-sm"><Icons.shield size={13} /> Review</button>
+                      <button className="btn btn-secondary btn-sm"><Icons.shield size={13} /> ገምግም</button>
                     </td>
                   </tr>
                 ))}
@@ -127,17 +132,16 @@ export default function EvaluationApprovals() {
       {isOversight && waiting.length > 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <div className="card-title">
-            Waiting on earlier levels
-            <span className="chip chip-warn">{waiting.length} in queue</span>
+            የቀደሙ ደረጃዎችን በመጠባበቅ ላይ
+            <span className="chip chip-warn">{waiting.length} በዝርዝር ውስጥ</span>
           </div>
           <div className="text-faint" style={{ fontSize: 12, marginBottom: 12 }}>
-            The approval chain advances level by level — these submissions are read-only until the prior
-            level has approved.
+            የማጽደቅ ሰንሰለቱ ደረጃ በደረጃ ይሄዳል — የቀደመው ደረጃ እስኪያጸድቅ ድረስ እነዚህ ማስረከቢያዎች ለንባብ ብቻ ናቸው።
           </div>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Employee</th><th>Form</th><th>Cycle</th><th>Waiting on</th></tr>
+                <tr><th>ሰራተኛ</th><th>ቅጽ</th><th>ዑደት</th><th>የሚጠብቀው</th></tr>
               </thead>
               <tbody>
                 {waiting.map((a) => (
@@ -163,8 +167,8 @@ export default function EvaluationApprovals() {
                     <td>
                       <div className="cell-strong">
                         {a.multi_approval
-                          ? <>top executives <span className="text-dim">({(a.required_approver_names || []).join(", ")})</span></>
-                          : (a.required_approver_names || [])[0] || "next manager"}
+                          ? <>ከፍተኛ አስፈፃሚዎች <span className="text-dim">({(a.required_approver_names || []).join(", ")})</span></>
+                          : (a.required_approver_names || [])[0] || "ቀጣዩ አስተዳዳሪ"}
                       </div>
                       <div className="cell-sub">
                         <span className="chip chip-indigo mono">L{a.next_level}/{a.effective_levels || a.approval_levels}</span>{" "}
@@ -193,7 +197,7 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
     api.get(`/evaluations/${assignmentId}`).then(setData).catch((e) => toast.push(e.message, "error"));
   }, [assignmentId, toast]);
 
-  if (!data) return <Modal title="Loading…" onClose={onClose}><div className="empty-state">Loading…</div></Modal>;
+  if (!data) return <Modal title="በመጫን ላይ…" onClose={onClose}><div className="empty-state">በመጫን ላይ…</div></Modal>;
 
   const levelLabel = data.next_level ? APPROVER_LABEL[data.next_level] || `level ${data.next_level}` : "";
   const canDecide = data.next_approver_id != null && data.next_approver_id === user.employee_id;
@@ -202,7 +206,7 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
   const isFinal = data.next_level >= (data.effective_levels || data.approval_levels || 0);
 
   async function decide() {
-    if (!comments.trim()) { toast.push("Comments are required for every decision", "error"); return; }
+    if (!comments.trim()) { toast.push("ለእያንዳንዱ ውሳኔ አስተያየት ያስፈልጋል", "error"); return; }
     setWorking(true);
     try {
       const res = await api.post(`/evaluations/${assignmentId}/decision`, {
@@ -212,13 +216,13 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
       toast.push(
         mode === "approve"
           ? res.status === "scored"
-            ? "Approved — final score computed for this evaluation"
+            ? "ጸድቋል — የዚህ ግምገማ የመጨረሻ ነጥብ ተሰልቷል"
             : res.status === "in_review"
               ? (data.multi_approval && approvedCount + 1 < requiredCount
-                ? "Approved — waiting on the remaining top executives"
-                : "Approved — routed to the next level of the chain")
-              : "Approved"
-          : "Returned to the employee for revision",
+                ? "ጸድቋል — የቀሩትን ከፍተኛ አስፈፃሚዎች ማጽደቅ በመጠባበቅ ላይ ነው"
+                : "ጸድቋል — ወደ ቀጣዩ የሰንሰለቱ ደረጃ ተልኳል")
+              : "ጸድቋል"
+          : "ለሰራተኛው ማሻሻያ ተመልሷል",
         "success",
       );
       onDecided();
@@ -232,29 +236,29 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
   const footer = canDecide ? (
     !mode ? (
       <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-        <button className="btn btn-secondary" onClick={onClose}>Close</button>
+        <button className="btn btn-secondary" onClick={onClose}>ዝጋ</button>
         <button className="btn btn-danger" onClick={() => setMode("reject")} disabled={working}>
-          <Icons.close size={14} /> Return for revision
+          <Icons.close size={14} /> ለማሻሻያ መልስ
         </button>
         <button className="btn btn-primary" onClick={() => setMode("approve")} disabled={working}>
-          <Icons.check size={15} /> Approve
+          <Icons.check size={15} /> አጽድቅ
         </button>
       </div>
     ) : (
       <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-        <button className="btn btn-secondary" onClick={() => setMode(null)}>Back</button>
+        <button className="btn btn-secondary" onClick={() => setMode(null)}>ተመለስ</button>
         <button
           className={mode === "approve" ? "btn btn-primary" : "btn btn-danger"}
           onClick={decide}
           disabled={working || !comments.trim()}
         >
-          {working ? "Working…" : mode === "approve" ? "Confirm approval" : "Confirm return"}
+          {working ? "በሂደት ላይ…" : mode === "approve" ? "ማጽደቁን አረጋግጥ" : "መመለሱን አረጋግጥ"}
         </button>
       </div>
     )
   ) : (
     <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-      <button className="btn btn-secondary" onClick={onClose}>Close</button>
+      <button className="btn btn-secondary" onClick={onClose}>ዝጋ</button>
     </div>
   );
 
@@ -269,32 +273,32 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
       {canDecide ? (
         <div className="decision-banner" style={{ borderLeftColor: mode === "reject" ? "var(--crimson)" : "var(--indigo)" }}>
           {mode === "approve"
-            ? <><Icons.check size={15} /> Approving at <b>level {data.next_level}</b> ({levelLabel})
+            ? <><Icons.check size={15} /> በ <b>ደረጃ {data.next_level}</b> እያጸደቁ ነው ({levelLabel})
                 {data.multi_approval
-                  ? ` — final sign-off, all top executives must approve (${approvedCount}/${requiredCount} so far).`
-                  : isFinal ? " — this is the final level, a score will be computed." : " — the form moves to the next level."}</>
-            : <><Icons.close size={15} /> Returning this form to {data.employee?.full_name} for revision.</>}
+                  ? ` — የመጨረሻ ማጽደቅ፤ ሁሉም ከፍተኛ አስፈፃሚዎች ማጽደቅ አለባቸው (${approvedCount}/${requiredCount} እስካሁን)።`
+                  : isFinal ? " — ይህ የመጨረሻ ደረጃ ነው፤ ነጥብ ይሰላል።" : " — ቅጹ ወደ ቀጣዩ ደረጃ ይላካል።"}</>
+            : <><Icons.close size={15} /> ይህን ቅጽ ለማሻሻያ ወደ {data.employee?.full_name} እየመለሱ ነው።</>}
         </div>
       ) : (
         <div className="decision-banner banner-muted" style={{ marginBottom: 10, borderLeftColor: "var(--indigo)" }}>
           <Icons.clock size={15} />
           {data.multi_approval
-            ? <>Final sign-off — awaiting the top executives: <b>{(data.pending_approver_names || []).join(", ")}</b> (approved: {(data.approved_approver_names || []).join(", ") || "none"}). This form is read-only for you.</>
-            : <>Awaiting <b>{(data.pending_approver_names || [])[0] || data.next_approver_name || "the next approver"}</b> for level {data.next_level} ({levelLabel}) — this form is read-only for you.</>}
+            ? <>የመጨረሻ ማጽደቅ — ከፍተኛ አስፈፃሚዎችን በመጠባበቅ ላይ፦ <b>{(data.pending_approver_names || []).join(", ")}</b> (ያጸደቁ፦ {(data.approved_approver_names || []).join(", ") || "የለም"})። ይህ ቅጽ ለእርስዎ ለንባብ ብቻ ነው።</>
+            : <><b>{(data.pending_approver_names || [])[0] || data.next_approver_name || "ቀጣዩ አጽዳቂ"}</b>ን በደረጃ {data.next_level} ({levelLabel}) በመጠባበቅ ላይ — ይህ ቅጽ ለእርስዎ ለንባብ ብቻ ነው።</>}
         </div>
       )}
 
       {data.multi_approval && (
         <div className="decision-banner banner-muted" style={{ marginTop: 10, borderLeftColor: "var(--gold)" }}>
           <Icons.shield size={15} />
-          <b>Top executive sign-off</b> — level {data.next_level} requires every top executive to approve.
-          {" "}Approved: <b>{(data.approved_approver_names || []).join(", ") || "none"}</b>. Still pending: <b>{(data.pending_approver_names || []).join(", ")}</b>.
+          <b>የከፍተኛ አስፈፃሚ ማጽደቅ</b> — ደረጃ {data.next_level} እያንዳንዱ ከፍተኛ አስፈፃሚ እንዲያጸድቅ ይፈልጋል።
+          {" "}ያጸደቁ፦ <b>{(data.approved_approver_names || []).join(", ") || "የለም"}</b>። አሁንም የሚጠብቁ፦ <b>{(data.pending_approver_names || []).join(", ")}</b>።
         </div>
       )}
 
       <div className={`decision-banner banner-muted`} style={{ marginTop: 10, borderLeftColor: "var(--indigo)" }}>
-        <Icons.user size={15} /> <b>{data.evaluator_type === "self" ? "Self evaluation" : PERSPECTIVE_LABEL[data.evaluator_type] || data.evaluator_type}</b>
-        {data.evaluator_type !== "self" && data.evaluator?.full_name ? ` by ${data.evaluator.full_name}` : ""} for <b>{data.employee?.full_name}</b>
+        <Icons.user size={15} /> <b>{data.evaluator_type === "self" ? "የራስ ግምገማ" : PERSPECTIVE_LABEL[data.evaluator_type] || data.evaluator_type}</b>
+        {data.evaluator_type !== "self" && data.evaluator?.full_name ? ` በ ${data.evaluator.full_name}` : ""} ለ <b>{data.employee?.full_name}</b>
       </div>
 
       <EvaluationForm form={data.form} values={Object.fromEntries(
@@ -303,11 +307,11 @@ function DecisionModal({ assignmentId, onClose, onDecided, toast }) {
 
       {canDecide && (
         <div className="field" style={{ marginTop: 16 }}>
-          <label>Decision comments (required — recorded in the audit trail)</label>
+          <label>የውሳኔ አስተያየት (አስፈላጊ — በኦዲት መዝገብ ይመዘገባል)</label>
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
-            placeholder={mode === "reject" ? "What needs to be revised?" : "Evidence and reasoning for your approval…"}
+            placeholder={mode === "reject" ? "ምን መሻሻል አለበት?" : "ለማጽደቅዎ ማስረጃ እና ምክንያት…"}
             rows={3}
           />
         </div>

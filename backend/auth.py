@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import os
+import secrets
 import time
 from functools import wraps
 from threading import Lock
@@ -10,9 +11,14 @@ from flask import request, jsonify, g
 
 from database import get_db
 
-JWT_SECRET = os.environ.get("PMS_JWT_SECRET", "dev-secret-change-me-in-production")
-if os.environ.get("PMS_ENV") == "production" and JWT_SECRET == "dev-secret-change-me-in-production":
+JWT_SECRET = os.environ.get("PMS_JWT_SECRET")
+if not JWT_SECRET and os.environ.get("PMS_ENV") == "production":
     raise RuntimeError("PMS_JWT_SECRET must be set when PMS_ENV=production")
+if not JWT_SECRET:
+    # A random per-process development key prevents a shared default signing
+    # key from becoming a production vulnerability. Restarting local Flask
+    # invalidates existing sessions, which is preferable to token forgery.
+    JWT_SECRET = secrets.token_urlsafe(32)
 JWT_ALGO = "HS256"
 TOKEN_TTL_SECONDS = 8 * 3600
 
@@ -79,9 +85,10 @@ def hash_password(password: str, salt: str = None) -> str:
 def verify_password(password: str, stored: str) -> bool:
     try:
         salt, digest_hex = stored.split("$")
-    except ValueError:
+        salt_bytes = bytes.fromhex(salt)
+    except (TypeError, ValueError):
         return False
-    check = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 100_000)
+    check = hashlib.pbkdf2_hmac("sha256", password.encode(), salt_bytes, 100_000)
     return hmac.compare_digest(check.hex(), digest_hex)
 
 
@@ -113,7 +120,24 @@ def login_required(fn):
             return jsonify({"error": "Token expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
-        g.user = payload
+        # Refresh authorization state on every request so disabled users and
+        # role changes do not remain effective for the entire token lifetime.
+        db = get_db()
+        try:
+            user = db.execute(
+                "SELECT u.id, u.username, u.role, u.employee_id, e.employment_status "
+                "FROM users u LEFT JOIN employees e ON e.id=u.employee_id "
+                "WHERE u.id=? AND u.username=?",
+                (payload.get("sub"), payload.get("username")),
+            ).fetchone()
+        finally:
+            db.close()
+        if not user or (
+                user["employee_id"] is not None
+                and user["employment_status"] != "active"):
+            return jsonify({"error": "Account is inactive"}), 401
+        g.user = {**payload, "username": user["username"], "role": user["role"],
+                  "employee_id": user["employee_id"]}
         return fn(*args, **kwargs)
 
     return wrapper
@@ -133,22 +157,59 @@ def roles_required(*allowed_roles):
     return decorator
 
 
-READ_ROLES = ("admin", "executive")
+READ_ROLES = ("admin", "executive", "director")
+
+# Roles that act as supervisors whose scope is their org subtree.
+SUPERVISOR_ROLES = ("director", "dept_head", "team_leader", "manager")
+
+def _employee_subtree_contains(db, owner_id, target_employee_id) -> bool:
+    """True if `target_employee_id` falls within the org subtree rooted at the
+    unit that `owner_id` belongs to. Uses the departments.parent_id tree.
+
+    A leader's unit is their department_id. Their scope is everyone whose own
+    unit is the leader's unit or any descendant of it."""
+    owner = db.execute(
+        "SELECT id, department_id FROM employees WHERE id=?", (owner_id,)
+    ).fetchone()
+    if not owner or not owner["department_id"]:
+        return False
+    target = db.execute(
+        "SELECT id, department_id FROM employees WHERE id=?", (target_employee_id,)
+    ).fetchone()
+    if not target or not target["department_id"]:
+        return False
+    target_unit = target["department_id"]
+
+    # Recursively gather the leader's unit id + all descendant unit ids.
+    rows = db.execute(
+        "WITH RECURSIVE subtree(id) AS ("
+        "  SELECT ? "
+        "  UNION "
+        "  SELECT d.id FROM departments d JOIN subtree s ON d.parent_id = s.id "
+        ") SELECT id FROM subtree",
+        (owner["department_id"],)
+    ).fetchall()
+    unit_ids = {r["id"] for r in rows}
+    return target_unit in unit_ids
 
 
 def is_manager_of(db, manager_employee_id, target_employee_id) -> bool:
-    """Direct-report check (one level). Used for scoping manager access."""
+    """Hierarchy check: true if by manager_id link OR, for tier leaders, by
+    org-subtree containment."""
     if manager_employee_id is None:
         return False
     row = db.execute(
         "SELECT manager_id FROM employees WHERE id = ?", (target_employee_id,)
     ).fetchone()
-    return bool(row and row["manager_id"] == manager_employee_id)
+    if row and row["manager_id"] == manager_employee_id:
+        return True
+    # Tier leaders oversee everyone in their org subtree (direct or indirect).
+    return _employee_subtree_contains(db, manager_employee_id, target_employee_id)
 
 
 def can_view_employee(g_user, target_employee_id: int, db=None) -> bool:
-    """RBAC check: admins/executives see everyone, managers see their direct
-    reports + self, employees see only themselves.
+    """RBAC check: admins/executives/directors see everyone, dept heads / team
+    leaders see their org subtree + self, employees see only themselves.
 
     Pass an already-open connection via `db` when one is available to avoid
     opening a second SQLite connection mid-request."""
@@ -156,7 +217,7 @@ def can_view_employee(g_user, target_employee_id: int, db=None) -> bool:
         return True
     if g_user["employee_id"] == target_employee_id:
         return True
-    if g_user["role"] == "manager":
+    if g_user["role"] in ("director", "dept_head", "team_leader", "manager"):
         if db is not None:
             return is_manager_of(db, g_user["employee_id"], target_employee_id)
         conn = get_db()

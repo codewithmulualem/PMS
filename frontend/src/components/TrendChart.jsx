@@ -11,7 +11,7 @@ function niceTicks(max) {
 
 export default function TrendChart({ points, color = "var(--indigo)", benchmark = null }) {
   if (!points || points.length < 2) {
-    return <div className="empty-state">Not enough data points to plot a trend.</div>;
+    return <div className="empty-state">አዝማሚያውን ለማሳየት በቂ የመረጃ ነጥቦች የሉም።</div>;
   }
 
   const vals = points.map((p) => p.value ?? 0);

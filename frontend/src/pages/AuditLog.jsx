@@ -5,12 +5,12 @@ import AuditEvent from "../components/AuditEvent";
 import { Icons } from "../components/icons";
 
 const TYPES = [
-  ["all", "All events"],
-  ["auth", "Auth"],
-  ["create", "Creates"],
-  ["update", "Updates"],
-  ["delete", "Deletes"],
-  ["score", "Score changes"],
+  ["all", "ሁሉም ክስተቶች"],
+  ["auth", "መግቢያ"],
+  ["create", "ፍጠር"],
+  ["update", "ማሻሻያ"],
+  ["delete", "ስረዛ"],
+  ["score", "የነጥብ ለውጦች"],
 ];
 
 const PAGES = 20;
@@ -36,7 +36,7 @@ export default function AuditLog() {
 
   return (
     <div>
-      <Topbar subtitle="Every change to the system of record — appended, never overwritten" />
+      <Topbar subtitle="በስርዓቱ መዝገብ ላይ የሚደረግ ሁሉም ለውጥ ይጨመራል፤ አይተካም" />
 
       {error && <div className="error-banner">{error}</div>}
 
@@ -50,7 +50,7 @@ export default function AuditLog() {
 
       <div className="card">
         {events.length === 0 && !error ? (
-          <div className="empty-state">No events match this filter.</div>
+          <div className="empty-state">ከዚህ ማጣሪያ ጋር የሚዛመድ ክስተት የለም።</div>
         ) : (
           events.map((ev) => <AuditEvent key={`${ev.timestamp}-${ev.id}`} event={ev} />)
         )}
@@ -58,7 +58,7 @@ export default function AuditLog() {
         {events.length >= limit && (
           <div className="center" style={{ paddingTop: 6 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setLimit((l) => l + PAGES)}>
-              <Icons.more size={14} /> Load more
+              <Icons.more size={14} /> ተጨማሪ ጫን
             </button>
           </div>
         )}

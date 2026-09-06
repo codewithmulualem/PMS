@@ -3,7 +3,7 @@ import json
 from flask import Blueprint, request, jsonify, g
 
 from database import get_db, rows_to_list, row_to_dict
-from auth import login_required, roles_required, can_view_employee
+from auth import login_required, roles_required, can_view_employee, SUPERVISOR_ROLES
 
 bp = Blueprint("competency_routes", __name__, url_prefix="/api")
 
@@ -65,13 +65,13 @@ def list_employee_competencies():
 
 
 @bp.post("/employee-competencies")
-@roles_required("admin", "manager")
+@roles_required("admin", *SUPERVISOR_ROLES)
 def upsert_employee_competency():
     data = request.get_json(force=True) or {}
     required = ["employee_id", "competency_id"]
     if any(not data.get(f) for f in required):
         return jsonify({"error": f"required: {required}"}), 400
-    if g.user["role"] == "manager" and not can_view_employee(g.user, data["employee_id"]):
+    if g.user["role"] in SUPERVISOR_ROLES and not can_view_employee(g.user, data["employee_id"]):
         return jsonify({"error": "Forbidden"}), 403
     db = get_db()
     try:

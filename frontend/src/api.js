@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5001/api";
+// Relative "/api" keeps dev same-origin through the Vite proxy. Production can
+// override with an absolute URL via VITE_API_BASE_URL in .env.
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // Loaded synchronously at module scope so that any request fired by a child
 // effect (e.g. CycleProvider on mount, which runs BEFORE AuthProvider's

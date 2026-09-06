@@ -9,7 +9,7 @@ no router library, kept intentionally minimal.
 ```bash
 cd frontend
 npm install
-cp .env.example .env    # points at http://127.0.0.1:5001/api by default
+cp .env.example .env    # defaults to "/api"; dev only — requests are same-origin via the Vite proxy
 npm run dev              # http://localhost:5173
 ```
 

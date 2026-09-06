@@ -27,7 +27,11 @@ filename order. To evolve the schema:
 3. Migrations must be additive (new tables / nullable columns) so they never
    destroy existing data.
 
-## Demo accounts (password: `password123`)
+## Demo accounts
+
+Set `PMS_DEMO_PASSWORD` before running the seed script. If it is omitted in
+local development, the seed generates a random password and prints it once.
+Production seeding refuses to run without an explicit password.
 
 | Username    | Role       | Notes                                      |
 |-------------|------------|--------------------------------------------|
@@ -97,7 +101,7 @@ backend/
 
 ## Security notes before using this beyond a demo
 
-- Set `PMS_JWT_SECRET` to a real secret via environment variable.
-- Tighten `ALLOWED_ORIGIN` in `app.py` to your actual frontend origin instead of `*`.
+- Set `PMS_JWT_SECRET` and `PMS_ALLOWED_ORIGIN` to deployment-specific values.
+- Keep `PMS_DEBUG=0` in production.
 - Put this behind a real WSGI server (gunicorn/uwsgi) — `app.run()` is dev-only.
 - Move from SQLite to Postgres for concurrent multi-user production use.

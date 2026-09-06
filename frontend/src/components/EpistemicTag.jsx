@@ -2,11 +2,11 @@
 // and PREDICTION are never visually interchangeable. Every number in the app
 // should be wrapped with the tag that matches how it was produced.
 const LABELS = {
-  fact: "Fact",
-  calc: "Calculation",
-  insight: "AI Insight",
-  prediction: "Prediction",
-  risk: "Needs Review",
+  fact: "እውነታ",
+  calc: "ስሌት",
+  insight: "የAI ግንዛቤ",
+  prediction: "ትንበያ",
+  risk: "ግምገማ ያስፈልጋል",
 };
 
 export default function EpistemicTag({ kind = "fact" }) {

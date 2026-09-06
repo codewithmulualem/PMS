@@ -19,10 +19,10 @@ export default function PositionsPanel({ units, positions, employees, unitId, on
     try {
       if (editingId) {
         await api.put(`/org/positions/${editingId}`, form);
-        toast.push("Position updated", "success");
+        toast.push("የሥራ መደቡ ተሻሽሏል", "success");
       } else {
         await api.post("/org/positions", { ...form, org_unit_id: activeUnitId });
-        toast.push("Position added", "success");
+        toast.push("የሥራ መደቡ ተጨምሯል", "success");
       }
       setForm(EMPTY);
       setEditingId(null);
@@ -38,10 +38,10 @@ export default function PositionsPanel({ units, positions, employees, unitId, on
   }
 
   async function remove(p) {
-    if (!window.confirm(`Delete position "${p.title}"?`)) return;
+    if (!window.confirm(`የሥራ መደብ “${p.title}” ይሰረዝ?`)) return;
     try {
       await api.delete(`/org/positions/${p.id}`);
-      toast.push("Position deleted", "success");
+      toast.push("የሥራ መደቡ ተሰርዟል", "success");
       onChanged();
     } catch (err) {
       toast.push(err.message, "error");
@@ -52,7 +52,7 @@ export default function PositionsPanel({ units, positions, employees, unitId, on
     <div>
       {onUnitIdChange && (
         <div className="field" style={{ maxWidth: 340 }}>
-          <label>Org unit</label>
+          <label>የድርጅት ክፍል</label>
           <select value={activeUnitId ?? ""} onChange={(e) => onUnitIdChange(Number(e.target.value) || null)}>
             {units.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
@@ -61,43 +61,43 @@ export default function PositionsPanel({ units, positions, employees, unitId, on
         </div>
       )}
       {!activeUnit && !onUnitIdChange && (
-        <div className="empty-state">Select a unit to see its positions.</div>
+        <div className="empty-state">የሥራ መደቦቹን ለማየት ክፍል ይምረጡ።</div>
       )}
       {activeUnit && (
         <div className="grid grid-2">
           <div className="card">
             <div className="card-title">
-              Positions — {activeUnit.name}
+              የሥራ መደቦች — {activeUnit.name}
               {onUnitIdChange && ""}
             </div>
             {canEdit && (
               <form onSubmit={save} style={{ marginBottom: 10 }}>
                 <div className="field">
-                  <label>{editingId ? "Edit position" : "Title"}</label>
-                  <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Data Engineer" />
+                  <label>{editingId ? "የሥራ መደብ አርትዕ" : "ርዕስ"}</label>
+                  <input required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="ለምሳሌ፦ የመረጃ መሐንዲስ" />
                 </div>
                 <div className="flex gap-8" style={{ alignItems: "center" }}>
                   <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                    <label>Job grade</label>
-                    <input value={form.job_grade} onChange={(e) => setForm({ ...form, job_grade: e.target.value })} placeholder="e.g. G5" />
+                    <label>የሥራ ደረጃ</label>
+                    <input value={form.job_grade} onChange={(e) => setForm({ ...form, job_grade: e.target.value })} placeholder="ለምሳሌ፦ ደረጃ 5" />
                   </div>
                   <label className="flex gap-8" style={{ alignItems: "center", fontSize: 13, marginTop: 18 }}>
                     <input type="checkbox" checked={form.is_head} onChange={(e) => setForm({ ...form, is_head: e.target.checked })} />
-                    Head position
+                    የኃላፊ መደብ
                   </label>
                 </div>
                 <div className="flex gap-8" style={{ marginTop: 10 }}>
-                  <button className="btn btn-primary btn-sm" type="submit"><Icons.plus size={13} /> {editingId ? "Save" : "Add"}</button>
+                  <button className="btn btn-primary btn-sm" type="submit"><Icons.plus size={13} /> {editingId ? "አስቀምጥ" : "ጨምር"}</button>
                   {editingId && (
-                    <button type="button" className="btn btn-sm" onClick={() => { setEditingId(null); setForm(EMPTY); }}>Cancel</button>
+                    <button type="button" className="btn btn-sm" onClick={() => { setEditingId(null); setForm(EMPTY); }}>ሰርዝ</button>
                   )}
                 </div>
               </form>
             )}
           </div>
           <div className="card">
-            <div className="card-title">Position List</div>
-            {list.length === 0 && <div className="empty-state">No positions in this unit.</div>}
+            <div className="card-title">የሥራ መደብ ዝርዝር</div>
+            {list.length === 0 && <div className="empty-state">በዚህ ክፍል ውስጥ የሥራ መደብ የለም።</div>}
             {list.map((p) => {
               const occ = occupant(p.id);
               return (
@@ -105,18 +105,18 @@ export default function PositionsPanel({ units, positions, employees, unitId, on
                   <div>
                     <div className="cell-strong">
                       {p.title}
-                      {p.is_head === 1 && <span className="chip chip-indigo" style={{ marginLeft: 8 }}>head</span>}
-                      {!p.active && <span className="chip chip-neutral" style={{ marginLeft: 8 }}>inactive</span>}
+                      {p.is_head === 1 && <span className="chip chip-indigo" style={{ marginLeft: 8 }}>ኃላፊ</span>}
+                      {!p.active && <span className="chip chip-neutral" style={{ marginLeft: 8 }}>ንቁ አይደለም</span>}
                     </div>
                     <div className="cell-sub">
-                      {occ ? `${occ.full_name} (${occ.position || occ.job_grade || "no role"})` : "unoccupied"}
+                      {occ ? `${occ.full_name} (${occ.position || occ.job_grade || "የሥራ መደብ የለም"})` : "ባዶ"}
                     </div>
                     {p.job_grade && <span className="mono text-faint" style={{ fontSize: 11.5 }}>{p.job_grade}</span>}
                   </div>
                   {canEdit && (
                     <div className="tree-actions">
-                      <button title="Edit" onClick={() => startEdit(p)}><Icons.edit size={14} /></button>
-                      <button title="Delete" onClick={() => remove(p)}><Icons.trash size={14} /></button>
+                      <button title="አርትዕ" onClick={() => startEdit(p)}><Icons.edit size={14} /></button>
+                      <button title="ሰርዝ" onClick={() => remove(p)}><Icons.trash size={14} /></button>
                     </div>
                   )}
                 </div>

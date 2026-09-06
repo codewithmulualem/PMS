@@ -3,15 +3,20 @@
 Idempotent: re-running clears and rebuilds all tables.
 
 Run with:  python3 seed.py
-Login accounts created (all use password: "password123"):
-  admin1     -> admin      (Rediat Amare, HR Director)
-  exec1      -> executive  (Dr. Lelise Neme, Director General)
-  manager1   -> manager    (Ato Tesfaye Girma, Director - Env. Regulatory)
-  manager2   -> manager    (W/ro Hirut Bekele, Director - Env. System Establishment)
-  employee1  -> employee   (Ato Dawit Mekonnen, Senior ESIA Expert)
-  employee2  -> employee   (W/ro Fatuma Ahmed, Environmental Inspector)
-  employee3  -> employee   (Ato Bereket Tesfa, Climate Change Specialist)
-  employee4  -> employee   (W/ro Sara Tadesse, ICT Officer)
+Login accounts use `PMS_DEMO_PASSWORD` when provided. Local development
+generates a random password and prints it after seeding:
+  admin1     -> admin        (Rediat Amare, HR Director)
+  exec1      -> executive    (Dr. Lelise Neme, Director General)
+  director1  -> director     (Ato Tesfaye Girma, Director - Env. Regulatory)
+  director2  -> director     (W/ro Hirut Bekele, Director - Env. System Establishment)
+  depthead1  -> dept_head    (W/ro Lemnedework Abebe, Director - Policy & International Affairs)
+  lead1      -> team_leader  (Ato Solomon Girma, ESIA Review Team)
+  lead2      -> team_leader  (Ato Leul Kassa, Inspection Team)
+  lead3      -> team_leader  (Ato Endalkachew Shiferaw, MRV & Reporting Team)
+  employee1  -> employee     (Ato Dawit Mekonnen, Senior ESIA Expert)
+  employee2  -> employee     (W/ro Fatuma Ahmed, Environmental Inspector)
+  employee3  -> employee     (Ato Bereket Tesfa, Climate Change Specialist)
+  employee4  -> employee     (W/ro Sara Tadesse, ICT Officer)
 
 Demo dataset covers the Phase 0 enterprise foundation:
   - EPA organizational hierarchy: Authority -> Directorates -> Departments -> Teams
@@ -21,10 +26,19 @@ Demo dataset covers the Phase 0 enterprise foundation:
 """
 
 import json
+import os
+import secrets
 from datetime import date, datetime, timedelta
 
 from database import init_db, get_db
 from auth import hash_password
+
+
+DEMO_PASSWORD = os.environ.get("PMS_DEMO_PASSWORD")
+if not DEMO_PASSWORD:
+    if os.environ.get("PMS_ENV") == "production":
+        raise RuntimeError("PMS_DEMO_PASSWORD must be set before seeding production")
+    DEMO_PASSWORD = secrets.token_urlsafe(12)
 
 
 def run():
@@ -50,6 +64,7 @@ def run():
         "demo_accounts", "navigation_items",
         "activity_progress_logs", "activity_kpis",
         "program_activities", "programs",
+        "weekly_tasks", "weekly_plans", "strategic_goal_kpis", "strategic_goals",
     ]
     for t in tables:
         db.execute(f"DROP TABLE IF EXISTS {t}")
@@ -132,6 +147,15 @@ def run():
     # Level 3: Teams under Environmental Information
     data_mgmt_id = dept("Data Management Team", ut_team, env_info_id, "DMG-T")
 
+    # Level 3: Teams for departments whose staff must sit inside a team
+    pollution_mon_id = dept("Pollution Monitoring Team", ut_team, pollution_id, "POLL-T")
+    ict_support_id = dept("ICT Support Team", ut_team, ict_id, "ICT-S")
+    hr_ops_id = dept("HR Operations Team", ut_team, hr_id, "HR-OPS")
+    proc_team_id = dept("Procurement Team", ut_team, procurement_id, "PROC-T")
+    fin_ops_id = dept("Finance Operations Team", ut_team, finance_id, "FIN-OPS")
+    policy_team_id = dept("Policy Analysis Team", ut_team, policy_id, "PIA-T")
+    dg_sec_id = dept("DG Secretariat Team", ut_team, dg_office_id, "ODG-S")
+
     # ---------------- Positions ----------------
     def position(title, grade, unit_id, is_head=0):
         db.execute(
@@ -160,6 +184,26 @@ def run():
     pos_proc_dir = position("Procurement Director", "G9", procurement_id, 1)
     pos_ict_dir = position("ICT Director", "G9", ict_id, 1)
     pos_policy_dir = position("Director - Policy & International Affairs", "G9", policy_id, 1)
+
+    # Team leader positions (level 3)
+    pos_esia_lead = position("Team Leader - ESIA Review", "G8", esia_review_id, 1)
+    pos_inspection_lead = position("Team Leader - Inspection", "G8", inspection_id, 1)
+    pos_enforcement_lead = position("Team Leader - Enforcement", "G8", enforcement_id, 1)
+    pos_eia_licensing_lead = position("Team Leader - EIA Licensing", "G8", eia_licensing_id, 1)
+    pos_biosafety_lead = position("Team Leader - Biosafety", "G8", biosafety_team_id, 1)
+    pos_mrv_lead = position("Team Leader - MRV & Reporting", "G8", mrv_id, 1)
+    pos_adaptation_lead = position("Team Leader - Adaptation", "G8", adaptation_id, 1)
+    pos_monitoring_lead = position("Team Leader - Monitoring", "G8", monitoring_id, 1)
+    pos_data_mgmt_lead = position("Team Leader - Data Management", "G8", data_mgmt_id, 1)
+
+    # Team leader positions for the new teams (within their teams)
+    pos_pollution_mon_lead = position("Team Leader - Pollution Monitoring", "G8", pollution_mon_id, 1)
+    pos_ict_lead = position("Team Leader - ICT Support", "G8", ict_support_id, 1)
+    pos_hr_lead = position("Team Leader - HR Operations", "G8", hr_ops_id, 1)
+    pos_proc_lead = position("Team Leader - Procurement", "G8", proc_team_id, 1)
+    pos_fin_lead = position("Team Leader - Finance Operations", "G8", fin_ops_id, 1)
+    pos_policy_lead = position("Team Leader - Policy Analysis", "G8", policy_team_id, 1)
+    pos_dg_sec_lead = position("Team Leader - DG Secretariat", "G8", dg_sec_id, 1)
 
     # Staff positions
     pos_senior_esia = position("Senior ESIA Expert", "G7", esia_review_id)
@@ -218,56 +262,105 @@ def run():
     getachew_id = emp("Ato Getachew Weldu", "getachew.weldu@epa.gov.et", "Director - Corporate Services",
                       "G10", corporate_id, lelise_id, position_id=pos_corp_dir, joined=900)
 
+    # Team Leaders (level 3) - Environmental Regulatory Sector
+    solomon_id = emp("Ato Solomon Girma", "solomon.girma@epa.gov.et", "Team Leader - ESIA Review", "G8",
+                     esia_review_id, tesfaye_id, position_id=pos_esia_lead, joined=750)
+    leul_id = emp("Ato Leul Kassa", "leul.kassa@epa.gov.et", "Team Leader - Inspection", "G8",
+                  inspection_id, tesfaye_id, position_id=pos_inspection_lead, joined=720)
+    meseret_id = emp("W/ro Meseret Alemu", "meseret.alemu@epa.gov.et", "Team Leader - Enforcement", "G8",
+                     enforcement_id, tesfaye_id, position_id=pos_enforcement_lead, joined=700)
+
+    # Team Leaders (level 3) - Environmental System Establishment
+    endalk_id = emp("Ato Endalkachew Shiferaw", "endalkachew.shiferaw@epa.gov.et", "Team Leader - MRV & Reporting", "G8",
+                    mrv_id, hirut_id, position_id=pos_mrv_lead, joined=720)
+    tsion_id = emp("W/ro Tsion Fikre", "tsion.fikre@epa.gov.et", "Team Leader - Adaptation", "G8",
+                   adaptation_id, hirut_id, position_id=pos_adaptation_lead, joined=680)
+    yared_id = emp("Ato Yared Teshome", "yared.teshome@epa.gov.et", "Team Leader - Monitoring", "G8",
+                   monitoring_id, hirut_id, position_id=pos_monitoring_lead, joined=650)
+
     # Staff - Environmental Regulatory Sector
+    # ESIA Review Team (reporting to Team Leader Solomon)
     dawit_id = emp("Ato Dawit Mekonnen", "dawit.mekonnen@epa.gov.et", "Senior ESIA Expert", "G7",
-                   esia_review_id, tesfaye_id, position_id=pos_senior_esia, joined=800)
-    fatuma_id = emp("W/ro Fatuma Ahmed", "fatuma.ahmed@epa.gov.et", "Environmental Inspector", "G7",
-                    inspection_id, tesfaye_id, position_id=pos_inspector, joined=600)
+                   esia_review_id, solomon_id, position_id=pos_senior_esia, joined=800)
     yonas_id = emp("Ato Yonas Desta", "yonas.desta@epa.gov.et", "ESIA Expert", "G6",
-                   esia_review_id, dawit_id, position_id=pos_esia_expert, joined=400)
-    mulu_id = emp("W/ro Mulu Getahun", "mulu.getahun@epa.gov.et", "EIA Licensing Officer", "G6",
-                  eia_licensing_id, tesfaye_id, position_id=pos_eia_licensing, joined=350)
+                   esia_review_id, solomon_id, position_id=pos_esia_expert, joined=400)
+    # Inspection Team (reporting to Team Leader Leul)
+    fatuma_id = emp("W/ro Fatuma Ahmed", "fatuma.ahmed@epa.gov.et", "Environmental Inspector", "G7",
+                    inspection_id, leul_id, position_id=pos_inspector, joined=600)
     habtamu_id = emp("Ato Habtamu Lemma", "habtamu.lemma@epa.gov.et", "Senior Environmental Inspector", "G8",
-                     inspection_id, tesfaye_id, position_id=pos_senior_inspector, joined=700)
+                     inspection_id, leul_id, position_id=pos_senior_inspector, joined=700)
+    # Enforcement Team (reporting to Team Leader Meseret)
     selam_id = emp("W/ro Selam Assefa", "selam.assefa@epa.gov.et", "Enforcement Officer", "G6",
-                   enforcement_id, tesfaye_id, position_id=pos_enforcement_officer, joined=300)
+                   enforcement_id, meseret_id, position_id=pos_enforcement_officer, joined=300)
+    # Team leaders for teams that hold staff but previously had no lead
+    eia_licensing_lead_id = emp("Ato Bekele Shiferaw", "bekele.shiferaw@epa.gov.et", "Team Leader - EIA Licensing", "G8",
+                                eia_licensing_id, tesfaye_id, position_id=pos_eia_licensing_lead, joined=500)
+    biosafety_lead_id = emp("W/ro Tirunesh Mengistu", "tirunesh.mengistu@epa.gov.et", "Team Leader - Biosafety", "G8",
+                            biosafety_team_id, tesfaye_id, position_id=pos_biosafety_lead, joined=450)
+    data_mgmt_lead_id = emp("Ato Israel Solomon", "israel.solomon@epa.gov.et", "Team Leader - Data Management", "G8",
+                            data_mgmt_id, hirut_id, position_id=pos_data_mgmt_lead, joined=420)
+    pollution_mon_lead_id = emp("W/ro Mahlet Girma", "mahlet.girma@epa.gov.et", "Team Leader - Pollution Monitoring", "G8",
+                                pollution_mon_id, hirut_id, position_id=pos_pollution_mon_lead, joined=380)
+    ict_lead_id = emp("Ato Fischa Tadesse", "fischa.tadesse@epa.gov.et", "Team Leader - ICT Support", "G8",
+                      ict_support_id, getachew_id, position_id=pos_ict_lead, joined=360)
+    hr_lead_id = emp("W/ro Etsegenet Alemu", "etsegenet.alemu@epa.gov.et", "Team Leader - HR Operations", "G8",
+                     hr_ops_id, rediat_id, position_id=pos_hr_lead, joined=340)
+    proc_lead_id = emp("Ato Tekle Berhanu", "tekle.berhanu@epa.gov.et", "Team Leader - Procurement", "G8",
+                       proc_team_id, getachew_id, position_id=pos_proc_lead, joined=330)
+    fin_lead_id = emp("W/ro Azeb Mesfin", "azeb.mesfin@epa.gov.et", "Team Leader - Finance Operations", "G8",
+                      fin_ops_id, getachew_id, position_id=pos_fin_lead, joined=320)
+    policy_lead_id = emp("Ato Mulugeta Bekele", "mulugeta.bekele@epa.gov.et", "Team Leader - Policy Analysis", "G8",
+                         policy_team_id, lelise_id, position_id=pos_policy_lead, joined=310)
+    dg_sec_lead_id = emp("Ato Samuel Demissie", "samuel.demissie@epa.gov.et", "Team Leader - DG Secretariat", "G8",
+                         dg_sec_id, lelise_id, position_id=pos_dg_sec_lead, joined=280)
+
+    # Remaining Regulatory staff (reporting to their team leaders)
+    mulu_id = emp("W/ro Mulu Getahun", "mulu.getahun@epa.gov.et", "EIA Licensing Officer", "G6",
+                  eia_licensing_id, eia_licensing_lead_id, position_id=pos_eia_licensing, joined=350)
     abebe_id = emp("Ato Abebe Chekol", "abebe.chekol@epa.gov.et", "Biosafety Officer", "G7",
-                   biosafety_team_id, tesfaye_id, position_id=pos_biosafety_officer, joined=500)
+                   biosafety_team_id, biosafety_lead_id, position_id=pos_biosafety_officer, joined=500)
 
     # Staff - Environmental System Establishment
+    # MRV & Reporting Team (reporting to Team Leader Endalkachev)
     bereket_id = emp("Ato Bereket Tesfa", "bereket.tesfa@epa.gov.et", "Climate Change Specialist", "G7",
-                     mrv_id, hirut_id, position_id=pos_climate_spec, joined=650)
+                     mrv_id, endalk_id, position_id=pos_climate_spec, joined=650)
+    # Adaptation Team (reporting to Team Leader Tsion)
     hanan_id = emp("W/ro Hanan Yusuf", "hanan.yusuf@epa.gov.et", "Adaptation Planning Specialist", "G6",
-                   adaptation_id, hirut_id, position_id=pos_adaptation_spec, joined=450)
+                   adaptation_id, tsion_id, position_id=pos_adaptation_spec, joined=450)
+    # Monitoring Team (reporting to Team Leader Yared)
     tadesse_id = emp("Ato Tadesse Belay", "tadesse.belay@epa.gov.et", "Environmental Monitoring Engineer", "G7",
-                     monitoring_id, hirut_id, position_id=pos_monitoring_eng, joined=550)
+                     monitoring_id, yared_id, position_id=pos_monitoring_eng, joined=550)
     aisha_id = emp("W/ro Aisha Mohammed", "aisha.mohammed@epa.gov.et", "Air Quality Specialist", "G6",
-                   monitoring_id, tadesse_id, position_id=pos_air_quality_spec, joined=250)
+                   monitoring_id, yared_id, position_id=pos_air_quality_spec, joined=250)
+    # Remaining Env Systems staff (director-level reporting)
     girum_id = emp("Ato Girum Ayalew", "girum.ayalew@epa.gov.et", "Environmental Data Analyst", "G6",
-                   data_mgmt_id, hirut_id, position_id=pos_data_analyst, joined=350)
+                   data_mgmt_id, data_mgmt_lead_id, position_id=pos_data_analyst, joined=350)
     nardos_id = emp("W/ro Nardos Tsegaye", "nardos.tsegaye@epa.gov.et", "E-Waste Management Specialist", "G6",
-                    pollution_id, hirut_id, position_id=pos_electronic_wr, joined=200)
+                    pollution_mon_id, pollution_mon_lead_id, position_id=pos_electronic_wr, joined=200)
 
     # Staff - Corporate Services
     sara_id = emp("W/ro Sara Tadesse", "sara.tadesse@epa.gov.et", "ICT Officer", "G6",
-                  ict_id, getachew_id, position_id=pos_ict_officer, joined=500)
+                  ict_support_id, ict_lead_id, position_id=pos_ict_officer, joined=500)
     kebede_id = emp("Ato Kebede Derese", "kebede.derese@epa.gov.et", "HRIS Specialist", "G6",
-                    hr_id, rediat_id, position_id=pos_hris_spec, joined=400)
+                    hr_ops_id, hr_lead_id, position_id=pos_hris_spec, joined=400)
     ashan_id = emp("W/ro Ashan Ebrahim", "ashan.ebrahim@epa.gov.et", "Procurement Officer", "G6",
-                   procurement_id, getachew_id, position_id=pos_procurement_officer, joined=350)
+                   proc_team_id, proc_lead_id, position_id=pos_procurement_officer, joined=350)
     tamrat_id = emp("Ato Tamrat Hailu", "tamrat.hailu@epa.gov.et", "Budget & Finance Officer", "G6",
-                    finance_id, getachew_id, position_id=pos_budget_officer, joined=450)
+                    fin_ops_id, fin_lead_id, position_id=pos_budget_officer, joined=450)
 
     # Staff - DG Office / Policy
     memhir_id = emp("Ato Memhirework Tilahun", "memhirework.tilahun@epa.gov.et", "DG Secretary", "G8",
-                    dg_office_id, lelise_id, position_id=pos_dg_secretary, joined=800)
+                    dg_sec_id, dg_sec_lead_id, position_id=pos_dg_secretary, joined=800)
     lemnede_id = emp("W/ro Lemnedework Abebe", "lemnedeework.abebe@epa.gov.et",
                      "Director - Policy & International Affairs", "G9",
                      policy_id, lelise_id, position_id=pos_policy_dir, joined=750)
     addisu_id = emp("Ato Addisu Legesse", "addisu.legesse@epa.gov.et", "Policy Analyst", "G7",
-                    policy_id, lemnede_id, position_id=pos_policy_advocate, joined=400)
+                    policy_team_id, policy_lead_id, position_id=pos_policy_advocate, joined=400)
     kidist_id = emp("W/ro Kidist Alemayehu", "kidist.alemayehu@epa.gov.et", "MEAs Coordination Officer", "G6",
-                    policy_id, lemnede_id, position_id=pos_mea_coord, joined=300)
+                    policy_team_id, policy_lead_id, position_id=pos_mea_coord, joined=300)
+
+    # Fix policy team lead's manager now that the Policy director exists
+    db.execute("UPDATE employees SET manager_id=? WHERE id=?", (lemnede_id, policy_lead_id))
 
     # ---------------- Reporting relationships ----------------
     def report(emp_id, sup_id, rtype="primary", start_days=700, end_days=None, reason=None):
@@ -288,28 +381,47 @@ def run():
     report(lemnede_id, lelise_id, "primary", 750)
     report(memhir_id, lelise_id, "primary", 800)
 
-    report(dawit_id, tesfaye_id, "primary", 800)
-    report(fatuma_id, tesfaye_id, "primary", 600)
-    report(yonas_id, dawit_id, "primary", 400)
-    report(mulu_id, tesfaye_id, "primary", 350)
-    report(habtamu_id, tesfaye_id, "primary", 700)
-    report(selam_id, tesfaye_id, "primary", 300)
-    report(abebe_id, tesfaye_id, "primary", 500)
+    # Team leaders -> directors
+    report(solomon_id, tesfaye_id, "primary", 750)
+    report(leul_id, tesfaye_id, "primary", 720)
+    report(meseret_id, tesfaye_id, "primary", 700)
+    report(eia_licensing_lead_id, tesfaye_id, "primary", 500)
+    report(biosafety_lead_id, tesfaye_id, "primary", 450)
+    report(endalk_id, hirut_id, "primary", 720)
+    report(tsion_id, hirut_id, "primary", 680)
+    report(yared_id, hirut_id, "primary", 650)
+    report(data_mgmt_lead_id, hirut_id, "primary", 420)
+    report(pollution_mon_lead_id, hirut_id, "primary", 380)
+    report(ict_lead_id, getachew_id, "primary", 360)
+    report(hr_lead_id, rediat_id, "primary", 340)
+    report(proc_lead_id, getachew_id, "primary", 330)
+    report(fin_lead_id, getachew_id, "primary", 320)
+    report(policy_lead_id, lemnede_id, "primary", 310)
+    report(dg_sec_lead_id, lelise_id, "primary", 280)
 
-    report(bereket_id, hirut_id, "primary", 650)
-    report(hanan_id, hirut_id, "primary", 450)
-    report(tadesse_id, hirut_id, "primary", 550)
-    report(aisha_id, tadesse_id, "primary", 250)
-    report(girum_id, hirut_id, "primary", 350)
-    report(nardos_id, hirut_id, "primary", 200)
+    # Team members -> team leaders
+    report(dawit_id, solomon_id, "primary", 800)
+    report(yonas_id, solomon_id, "primary", 400)
+    report(fatuma_id, leul_id, "primary", 600)
+    report(habtamu_id, leul_id, "primary", 700)
+    report(selam_id, meseret_id, "primary", 300)
+    report(mulu_id, eia_licensing_lead_id, "primary", 350)
+    report(abebe_id, biosafety_lead_id, "primary", 500)
+    report(bereket_id, endalk_id, "primary", 650)
+    report(hanan_id, tsion_id, "primary", 450)
+    report(tadesse_id, yared_id, "primary", 550)
+    report(aisha_id, yared_id, "primary", 250)
+    report(girum_id, data_mgmt_lead_id, "primary", 350)
+    report(nardos_id, pollution_mon_lead_id, "primary", 200)
 
-    report(sara_id, getachew_id, "primary", 500)
-    report(kebede_id, rediat_id, "primary", 400)
-    report(ashan_id, getachew_id, "primary", 350)
-    report(tamrat_id, getachew_id, "primary", 450)
+    report(sara_id, ict_lead_id, "primary", 500)
+    report(kebede_id, hr_lead_id, "primary", 400)
+    report(ashan_id, proc_lead_id, "primary", 350)
+    report(tamrat_id, fin_lead_id, "primary", 450)
 
-    report(addisu_id, lemnede_id, "primary", 400)
-    report(kidist_id, lemnede_id, "primary", 300)
+    report(memhir_id, dg_sec_lead_id, "primary", 800)
+    report(addisu_id, policy_lead_id, "primary", 400)
+    report(kidist_id, policy_lead_id, "primary", 300)
 
     # Functional relationship: Dawit supports climate change ESIA reviews
     report(dawit_id, hirut_id, "functional", 200, reason="Cross-sectoral ESIA support for climate activities")
@@ -362,7 +474,9 @@ def run():
 
     r_admin = role("admin", "Full platform administration")
     r_exec = role("executive", "Executive oversight and reporting")
-    r_mgr = role("manager", "Team management: assign, approve, and report on evaluations")
+    r_director = role("director", "Directorate Director: plan & oversee performance across the directorate")
+    r_dept_head = role("dept_head", "Department Head: oversee teams and their plans within a department")
+    r_team_leader = role("team_leader", "Team Leader: follow up on every member's tasks and activity")
     r_emp = role("employee", "Self-service: fill evaluations and acknowledge results")
     r_hr = role("hr_manager", "HR operations: org structure, positions, reporting relationships")
 
@@ -387,8 +501,12 @@ def run():
     grant(r_admin, p_admin)
     grant(r_exec, p_org_view, p_emp_view, p_report, p_report_export, p_audit,
           p_eval_build, p_eval_approve, p_goal, p_kpi)
-    grant(r_mgr, p_org_view, p_emp_view, p_goal, p_kpi, p_comp,
+    grant(r_director, p_org_view, p_emp_view, p_goal, p_kpi, p_comp,
           p_eval_assign, p_eval_approve, p_eval_fill, p_report)
+    grant(r_dept_head, p_org_view, p_emp_view, p_goal, p_kpi,
+          p_eval_assign, p_eval_approve, p_eval_fill, p_report)
+    grant(r_team_leader, p_org_view, p_emp_view, p_goal,
+          p_eval_assign, p_eval_fill, p_report)
     grant(r_emp, p_org_view, p_eval_fill, p_eval_ack)
     grant(r_hr, p_org_view, p_org_manage, p_emp_view, p_emp_manage, p_cycle,
           p_eval_build, p_eval_assign, p_audit, p_report, p_report_export)
@@ -398,13 +516,17 @@ def run():
         db.execute(
             "INSERT INTO users (username, password_hash, role, employee_id, role_id) "
             "SELECT ?,?,?,?, id FROM roles WHERE name=?",
-            (username, hash_password("password123"), role, employee_id, role),
+            (username, hash_password(DEMO_PASSWORD), role, employee_id, role),
         )
 
     add_user("admin1", "admin", rediat_id)
     add_user("exec1", "executive", lelise_id)
-    add_user("manager1", "manager", tesfaye_id)
-    add_user("manager2", "manager", hirut_id)
+    add_user("director1", "director", tesfaye_id)
+    add_user("director2", "director", hirut_id)
+    add_user("depthead1", "dept_head", lemnede_id)
+    add_user("lead1", "team_leader", solomon_id)
+    add_user("lead2", "team_leader", leul_id)
+    add_user("lead3", "team_leader", endalk_id)
     add_user("employee1", "employee", dawit_id)
     add_user("employee2", "employee", fatuma_id)
     add_user("employee3", "employee", bereket_id)
@@ -931,7 +1053,7 @@ def run():
             (uid, ntype, title, body, entity_type, entity_id),
         )
 
-    notify("manager1", "evaluation_pending",
+    notify("director2", "evaluation_pending",
            "Bereket Tesfa's 360 review needs approval",
            "The combined 360 feedback for Bereket Tesfa is awaiting your approval.",
            "evaluation", None)
@@ -980,13 +1102,20 @@ def run():
         db.execute(
             "INSERT INTO demo_accounts (username, password, role, note, sort_order) "
             "VALUES (?,?,?,?,?)",
-            (username, "password123", role, note, order))
+            # The reference endpoint intentionally omits this field. Keep no
+            # usable credential copy in the database; authentication uses the
+            # hashed value in users.password_hash.
+            (username, "", role, note, order))
 
     demo_acct("admin1", "HR Admin", "Full admin access", 1)
     demo_acct("exec1", "Director General", "Executive oversight", 2)
-    demo_acct("manager1", "Sector Director", "Regulatory sector management", 3)
-    demo_acct("employee1", "Senior Expert", "ESIA review specialist", 4)
-    demo_acct("employee4", "ICT Officer", "IT systems support", 5)
+    demo_acct("director1", "Sector Director", "Directorate Director - Regulatory", 3)
+    demo_acct("director2", "Sector Director", "Directorate Director - Env Systems", 4)
+    demo_acct("depthead1", "Dept Head", "Policy & International Affairs", 5)
+    demo_acct("lead1", "Team Leader", "ESIA Review Team", 6)
+    demo_acct("lead2", "Team Leader", "Inspection Team", 7)
+    demo_acct("employee1", "Senior Expert", "ESIA review specialist", 8)
+    demo_acct("employee4", "ICT Officer", "IT systems support", 9)
 
     def nav_item(role, item_key, label, icon, order):
         db.execute(
@@ -1006,12 +1135,36 @@ def run():
     nav_item("admin", "myself", "My Performance", "target", 10)
 
     nav_item("executive", "executive", "Executive Overview", "dashboard", 1)
-    nav_item("executive", "team", "My Team", "users", 2)
+    nav_item("executive", "strategic_goals", "Strategic Goals", "target", 2)
     nav_item("executive", "employees", "Browse Employees", "users", 3)
     nav_item("executive", "programs", "Programs", "briefcase", 4)
     nav_item("executive", "approvals", "Approvals", "shield", 5)
     nav_item("executive", "evaluations", "My Evaluations", "clipboard", 6)
     nav_item("executive", "myself", "My Performance", "target", 7)
+
+    nav_item("director", "team", "My Team", "users", 1)
+    nav_item("director", "directorate_plans", "Directorate Plans", "clipboard", 2)
+    nav_item("director", "strategic_goals", "Strategic Goals", "target", 3)
+    nav_item("director", "programs", "Programs", "briefcase", 4)
+    nav_item("director", "approvals", "Approvals", "shield", 5)
+    nav_item("director", "evaluations", "My Evaluations", "clipboard", 6)
+    nav_item("director", "myself", "My Performance", "target", 7)
+
+    nav_item("dept_head", "team", "My Team", "users", 1)
+    nav_item("dept_head", "department_plans", "Department Plans", "clipboard", 2)
+    nav_item("dept_head", "programs", "Programs", "briefcase", 3)
+    nav_item("dept_head", "approvals", "Approvals", "shield", 4)
+    nav_item("dept_head", "evaluations", "My Evaluations", "clipboard", 5)
+    nav_item("dept_head", "myself", "My Performance", "target", 6)
+
+    nav_item("team_leader", "team", "My Team", "users", 1)
+    nav_item("team_leader", "team_plans", "Team Plans", "clipboard", 2)
+    nav_item("team_leader", "weekly_tasks", "Weekly Tasks", "calendar", 3)
+    nav_item("team_leader", "programs", "Programs", "briefcase", 4)
+    nav_item("team_leader", "peer_reviews", "Peer Reviews", "users", 5)
+    nav_item("team_leader", "approvals", "Approvals", "shield", 6)
+    nav_item("team_leader", "evaluations", "My Evaluations", "clipboard", 7)
+    nav_item("team_leader", "myself", "My Performance", "target", 8)
 
     nav_item("manager", "team", "My Team", "users", 1)
     nav_item("manager", "programs", "Programs", "briefcase", 2)
@@ -1019,14 +1172,107 @@ def run():
     nav_item("manager", "evaluations", "My Evaluations", "clipboard", 4)
     nav_item("manager", "myself", "My Performance", "target", 5)
 
-    nav_item("employee", "programs", "Programs", "briefcase", 1)
-    nav_item("employee", "evaluations", "My Evaluations", "clipboard", 2)
-    nav_item("employee", "myself", "My Performance", "target", 3)
+    nav_item("employee", "home", "Home", "dashboard", 0)
+    nav_item("employee", "weekly_tasks", "Weekly Tasks", "calendar", 1)
+    nav_item("employee", "programs", "Programs", "briefcase", 2)
+    nav_item("employee", "peer_reviews", "Peer Reviews", "users", 3)
+    nav_item("employee", "evaluations", "My Evaluations", "clipboard", 4)
+    nav_item("employee", "myself", "My Performance", "target", 5)
+
+    # ---------------- Sample strategic goals (cascading cascade) ----------------
+    def strategic_goal(title, scope, owner_id=None, assigned_to_id=None, org_unit_id=None,
+                       parent_id=None, description="", status="active", progress=0, quarter="Q1", year=2026):
+        db.execute(
+            "INSERT INTO strategic_goals (parent_id, title, description, scope, owner_id, assigned_to_id, "
+            "org_unit_id, cycle_id, quarter, year, status, progress_pct) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (parent_id, title, description, scope, owner_id, assigned_to_id, org_unit_id,
+             cycle_id, quarter, year, status, progress),
+        )
+        return db.execute("SELECT id FROM strategic_goals WHERE title=? ORDER BY id DESC", (title,)).fetchone()["id"]
+
+    sg_annual = strategic_goal(
+        "Strengthen national environmental stewardship through improved compliance & climate action",
+        "annual", owner_id=lelise_id, description="Authority-wide annual strategic direction for 2026.")
+
+    sg_q_reg = strategic_goal(
+        "Raise ESIA review throughput while preserving quality", "quarterly",
+        owner_id=tesfaye_id, assigned_to_id=tesfaye_id, org_unit_id=regulatory_id, parent_id=sg_annual,
+        description="Directorate-level quarterly goal under the annual direction.", progress=40)
+
+    sg_q_climate = strategic_goal(
+        "Deliver the 2026 GHG inventory with MRV data confidence", "quarterly",
+        owner_id=hirut_id, assigned_to_id=hirut_id, org_unit_id=climate_id, parent_id=sg_annual,
+        description="Climate Change Response quarterly goal.", progress=60)
+
+    sg_team_esia = strategic_goal(
+        "Reduce median ESIA review cycle by 20%", "team",
+        owner_id=tesfaye_id, assigned_to_id=solomon_id, org_unit_id=esia_review_id, parent_id=sg_q_reg,
+        description="ESIA Review Team target for the quarter.", progress=50)
+
+    sg_team_mrv = strategic_goal(
+        "Complete the 2026 GHG inventory data collection", "team",
+        owner_id=hirut_id, assigned_to_id=endalk_id, org_unit_id=mrv_id, parent_id=sg_q_climate,
+        description="MRV & Reporting Team target for the quarter.", progress=70)
+
+    sg_backlog = strategic_goal(
+        "Clear the national ESIA backlog", "individual",
+        owner_id=solomon_id, assigned_to_id=dawit_id, org_unit_id=esia_review_id, parent_id=sg_team_esia,
+        description="Individual target: clear 40 pending reviews by end of Q1.", status="active", progress=35)
+
+    sg_ghg = strategic_goal(
+        "Complete the GHG inventory submission", "individual",
+        owner_id=endalk_id, assigned_to_id=bereket_id, org_unit_id=mrv_id, parent_id=sg_team_mrv,
+        description="Individual target: submit verified inventory to UNFCCC.", status="active", progress=70)
+
+    # ---------------- Sample weekly plans ----------------
+    def _week_bounds():
+        from datetime import date, timedelta
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        return monday.strftime("%Y-%m-%d"), (monday + timedelta(days=4)).strftime("%Y-%m-%d")
+
+    def weekly_plan(emp_id, tasks):
+        wb = _week_bounds()
+        db.execute(
+            "INSERT INTO weekly_plans (employee_id, week_start, week_end) VALUES (?,?,?)",
+            (emp_id, wb[0], wb[1]),
+        )
+        plan_id = db.execute(
+            "SELECT id FROM weekly_plans WHERE employee_id=? ORDER BY id DESC", (emp_id,)).fetchone()["id"]
+        for order, (title, status, goal_id, day) in enumerate(tasks):
+            db.execute(
+                "INSERT INTO weekly_tasks (plan_id, title, status, strategic_goal_id, sort_order, day_of_week) "
+                "VALUES (?,?,?,?,?,?)",
+                (plan_id, title, status, goal_id, order, day))
+        return plan_id
+
+    weekly_plan(dawit_id, [
+        ("Draft ESIA review for Yohannes Cement plant", "done", None, 1),
+        ("Attend stakeholder consultation for the Addis ring road", "done", None, 2),
+        ("Clear 3 pending ESIA applications from the backlog", "in_progress", sg_backlog, 3),
+        ("Update review tracker", "todo", None, 4),
+    ])
+    weekly_plan(fatuma_id, [
+        ("Scheduled industrial compliance inspection (Bole Lemi zone)", "done", None, 1),
+        ("Prepare violation citation for ABC Textiles", "in_progress", None, 2),
+        ("Submit weekly inspection report", "done", None, 5),
+    ])
+    weekly_plan(bereket_id, [
+        ("Compile 2026 GHG activity data", "done", sg_ghg, 1),
+        ("Run MRV data quality checks", "done", sg_ghg, 2),
+        ("Draft inventory methodology annex", "in_progress", sg_ghg, 3),
+        ("Coordinate with regional bureaus on data gaps", "todo", sg_ghg, 4),
+    ])
+    weekly_plan(sara_id, [
+        ("Patch identity-server critical vulnerability", "done", None, 2),
+        ("Migrate shared drive to cloud storage", "todo", None, 4),
+        ("Weekly help desk triage", "done", None, 5),
+    ])
 
     db.commit()
     db.close()
     print("Seed complete.")
-    print("Login accounts (password: password123): admin1, exec1, manager1, manager2, employee1, employee2, employee3, employee4")
+    print(f"Login accounts (password: {DEMO_PASSWORD}): admin1, exec1, director1, director2, depthead1, lead1, lead2, lead3, employee1, employee2, employee3, employee4")
 
 
 if __name__ == "__main__":

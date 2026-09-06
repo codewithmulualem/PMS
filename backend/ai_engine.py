@@ -26,14 +26,26 @@ from config import get_setting
 def _trend_insight(employee_id, cycle_id, current_score):
     db = get_db()
     try:
+        cycle = db.execute(
+            "SELECT id, name, start_date FROM performance_cycles WHERE id=?", (cycle_id,)
+        ).fetchone()
+        cutoff = cycle["start_date"] if cycle else None
         history = rows_to_list(
             db.execute(
                 "SELECT ps.overall_score, pc.name, pc.start_date FROM performance_scores ps "
                 "JOIN performance_cycles pc ON pc.id = ps.cycle_id "
-                "WHERE ps.employee_id = ? ORDER BY pc.start_date",
-                (employee_id,),
+                "WHERE ps.employee_id = ? AND (? IS NULL OR pc.start_date <= ? OR ps.cycle_id=?) "
+                "ORDER BY pc.start_date",
+                (employee_id, cutoff, cutoff, cycle_id),
             ).fetchall()
         )
+        if current_score is not None and not any(
+                item.get("name") == (cycle["name"] if cycle else None) for item in history):
+            history.append({
+                "overall_score": current_score,
+                "name": cycle["name"] if cycle else str(cycle_id),
+                "start_date": cycle["start_date"] if cycle else None,
+            })
     finally:
         db.close()
 
@@ -188,6 +200,10 @@ def generate_insights(employee_id: int, cycle_id: int, persist: bool = True):
         db = get_db()
         try:
             import json
+            # Regeneration should replace the current cycle's insight set,
+            # rather than creating an indistinguishable duplicate each time.
+            db.execute("DELETE FROM ai_insights WHERE employee_id=? AND cycle_id=?",
+                       (employee_id, cycle_id))
             for ins in insights:
                 db.execute(
                     "INSERT INTO ai_insights (employee_id, cycle_id, insight_type, content, supporting_data, confidence) "

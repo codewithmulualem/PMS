@@ -18,7 +18,11 @@ from flask import Blueprint, request, jsonify, g
 
 from database import get_db, rows_to_list, row_to_dict
 from auth import login_required, roles_required
+from chain import resolve_chain, resolve_tier_chain
 from scoring import weighted_average
+from routes.utils import log_audit as _log
+from routes.weekly_plan_routes import _tier_of, _get_week_bounds
+from routes.org_tiers import subtree_unit_ids
 
 bp = Blueprint("form_routes", __name__, url_prefix="/api")
 
@@ -27,42 +31,24 @@ PERSPECTIVES = ("self", "manager", "peer")
 DEFAULT_OPTIONS = ["Option 1", "Option 2", "Option 3"]
 
 
-def _log(db, entity_type, entity_id, action, old_value=None, new_value=None, reason=None):
-    db.execute(
-        "INSERT INTO audit_log (entity_type, entity_id, action, old_value, new_value, changed_by, reason) "
-        "VALUES (?,?,?,?,?,?,?)",
-        (entity_type, entity_id, action,
-         json.dumps(old_value, default=str) if old_value else None,
-         json.dumps(new_value, default=str) if new_value else None,
-         g.user.get("username", "system"), reason),
-    )
-
 
 def _approver_for_level(db, employee_id, level):
     """The employee id that approves at the given level (1 = immediate manager)."""
-    cur = employee_id
-    for _ in range(level):
-        row = db.execute("SELECT manager_id FROM employees WHERE id=?", (cur,)).fetchone()
-        if not row or not row["manager_id"]:
-            return None
-        cur = row["manager_id"]
-    return cur
+    chain = resolve_tier_chain(employee_id, db=db)
+    if not chain:
+        chain = [e["id"] if isinstance(e, dict) else e for e in resolve_chain(employee_id)]
+    if level < 1 or level > len(chain):
+        return None
+    return chain[level - 1]
 
 
 def _chain_depth(db, employee_id):
     """Consecutive managers above `employee_id` (0 = no manager, i.e. an apex
     employee). This is the depth used to derive an employee's approval levels."""
-    seen = set()
-    cur = employee_id
-    depth = 0
-    while cur is not None and cur not in seen and depth < 20:
-        seen.add(cur)
-        row = db.execute("SELECT manager_id FROM employees WHERE id=?", (cur,)).fetchone()
-        if not row or not row["manager_id"]:
-            break
-        cur = row["manager_id"]
-        depth += 1
-    return depth
+    chain = resolve_tier_chain(employee_id, db=db)
+    if chain:
+        return len(chain)
+    return len(resolve_chain(employee_id))
 
 
 def _top_executive_ids(db):
@@ -168,7 +154,10 @@ def _form_detail(db, form_id):
             "SELECT * FROM evaluation_form_questions WHERE section_id=? ORDER BY order_index, id", (s["id"],)
         ).fetchall())
         for q in s["questions"]:
-            q["options"] = json.loads(q["options"]) if q.get("options") else []
+            try:
+                q["options"] = json.loads(q["options"]) if q.get("options") else []
+            except json.JSONDecodeError:
+                q["options"] = []
     form["sections"] = sections
     return form
 
@@ -278,11 +267,66 @@ def _finalize_scored(db, assignment_id, old_status, old_level, reason):
             "section_scores": result["sections"] if result else []}
 
 
+def _department_plan_completion(db, dept_head_employee_id, week_start):
+    """Task-completion rate (0-100) of a department head's whole org subtree
+    (their department plus every descendant team), from weekly plans.
+
+    Used to auto-compute a dept head's score from their department's plan
+    performance (assigned by a director)."""
+    me = db.execute(
+        "SELECT department_id FROM employees WHERE id=?", (dept_head_employee_id,)
+    ).fetchone()
+    if not me or not me["department_id"]:
+        return None
+    unit_ids = subtree_unit_ids(db, me["department_id"])
+    if not unit_ids:
+        return None
+    marks = ",".join("?" * len(unit_ids))
+    employees = db.execute(
+        f"SELECT id FROM employees WHERE employment_status='active' AND department_id IN ({marks})",
+        (*unit_ids,)).fetchall()
+    emp_ids = [r["id"] for r in employees]
+    if not emp_ids:
+        return 0
+    emarks = ",".join("?" * len(emp_ids))
+    total = db.execute(
+        f"SELECT COUNT(*) c FROM weekly_tasks wt "
+        f"JOIN weekly_plans wp ON wp.id = wt.plan_id "
+        f"WHERE wp.week_start = ? AND wp.employee_id IN ({emarks})",
+        (week_start, *emp_ids)).fetchone()["c"]
+    done = db.execute(
+        f"SELECT COUNT(*) c FROM weekly_tasks wt "
+        f"JOIN weekly_plans wp ON wp.id = wt.plan_id "
+        f"WHERE wp.week_start = ? AND wp.employee_id IN ({emarks}) AND wt.status = 'done'",
+        (week_start, *emp_ids)).fetchone()["c"]
+    return round(done / total * 100) if total > 0 else 0
+
+
+def _is_department_head(db, employee_id):
+    """True when the employee heads a department (level-2 unit)."""
+    row = db.execute(
+        "SELECT d.id FROM employees e "
+        "JOIN departments d ON d.id = e.department_id "
+        "LEFT JOIN org_unit_types out ON out.id = d.unit_type_id "
+        "WHERE e.id=?", (employee_id,)).fetchone()
+    if not row:
+        return False
+    head = db.execute(
+        "SELECT e.id FROM positions p JOIN employees e ON e.position_id = p.id "
+        "WHERE p.org_unit_id = ? AND p.is_head = 1 AND p.active = 1 AND e.id = ?",
+        (row["id"], employee_id)).fetchone()
+    return head is not None
+
+
 def _assignment_detail(db, assignment_id):
     assignment = row_to_dict(db.execute("SELECT * FROM evaluation_assignments WHERE id=?", (assignment_id,)).fetchone())
     if not assignment:
         return None
     form = _form_detail(db, assignment["form_id"])
+    if form is None and assignment.get("auto_score_source"):
+        form = {"id": None, "name": f"Auto score: {assignment['auto_score_source']}",
+                "approval_levels": 0, "sections": [],
+                "weight_self": 1, "weight_manager": 1, "weight_peer": 1}
     employee = row_to_dict(db.execute(
         "SELECT * FROM employees WHERE id=?", (assignment["employee_id"],)).fetchone())
     evaluator = None
@@ -354,6 +398,9 @@ def _can_view_assignment(db, assignment):
     role = g.user["role"]
     if role in ("admin", "executive"):
         return True
+    # Auto-scored dept-head reviews are director-visible (assigned by a director).
+    if assignment.get("auto_score_source") and role == "director":
+        return True
     uid = g.user.get("employee_id")
     if assignment.get("evaluator_id") == uid:
         return True
@@ -363,7 +410,7 @@ def _can_view_assignment(db, assignment):
         # they see (dashboard / my-evaluations); exposing a manager's or
         # peer's in-flight answers would break review confidentiality.
         return assignment["status"] == "scored"
-    if role == "manager":
+    if role in ("director", "dept_head", "team_leader", "manager"):
         next_level = assignment.get("next_level") or assignment.get("current_level", 0) + 1
         form_levels = assignment.get("approval_levels") or 0
         return uid in _required_approvers(db, assignment["employee_id"], form_levels, next_level)
@@ -806,9 +853,22 @@ def assign_form(form_id):
             "SELECT DISTINCT perspective FROM evaluation_form_sections WHERE form_id=?", (form_id,)))
         created = []
         skipped = 0
+        blocked = []
         for entry in spec:
             emp_id = entry.get("employee_id")
             if not emp_id:
+                continue
+            # Individual scored evaluations are for team members and team
+            # leaders only. Dept heads, directors and executives receive no
+            # manual individual review (dept heads may be auto-scored by a
+            # director from their department's plan performance instead).
+            tier = _tier_of(db, emp_id)
+            if tier in ("dept_head", "director", "executive"):
+                name = db.execute(
+                    "SELECT full_name FROM employees WHERE id=?", (emp_id,)).fetchone()
+                blocked.append({"employee_id": emp_id,
+                                "full_name": name["full_name"] if name else f"#{emp_id}",
+                                "tier": tier})
                 continue
             aid = _create_assignment(db, form_id, emp_id, cycle_id, "self", emp_id, due_date)
             if aid not in created:
@@ -835,7 +895,7 @@ def assign_form(form_id):
                             "assignments": created},
                  reason="form assigned to employees (360)")
         db.commit()
-        return jsonify({"created": created, "skipped": skipped})
+        return jsonify({"created": created, "skipped": skipped, "blocked": blocked})
     finally:
         db.close()
 
@@ -996,7 +1056,38 @@ def save_or_submit(assignment_id):
 def pending_approvals():
     db = get_db()
     try:
-        rows = rows_to_list(db.execute(
+        uid = g.user.get("employee_id")
+        is_apex = uid in _top_executive_ids(db)
+
+        params = []
+        if not is_apex:
+            sql = (
+                "WITH RECURSIVE descendants(employee_id) AS ("
+                "    SELECT employee_id FROM reporting_relationships "
+                "    WHERE supervisor_id = ? AND relationship_type='primary' AND is_active = 1 "
+                "    UNION "
+                "    SELECT e.id FROM employees e "
+                "    WHERE e.manager_id = ? AND NOT EXISTS ("
+                "        SELECT 1 FROM reporting_relationships r "
+                "        WHERE r.employee_id=e.id AND r.relationship_type='primary' AND r.is_active=1"
+                "    ) "
+                "    UNION "
+                "    SELECT r.employee_id FROM reporting_relationships r "
+                "    INNER JOIN descendants d ON r.supervisor_id = d.employee_id "
+                "    WHERE r.relationship_type='primary' AND r.is_active = 1 "
+                "    UNION "
+                "    SELECT e.id FROM employees e "
+                "    INNER JOIN descendants d ON e.manager_id = d.employee_id "
+                "    WHERE NOT EXISTS ("
+                "        SELECT 1 FROM reporting_relationships r "
+                "        WHERE r.employee_id=e.id AND r.relationship_type='primary' AND r.is_active=1"
+                "    )"
+                ") "
+            )
+            params = [uid, uid]
+        else:
+            sql = ""
+        sql += (
             "SELECT a.*, f.name AS form_name, f.approval_levels, "
             "e.full_name AS subject_name, e.position AS subject_position, "
             "ev.full_name AS evaluator_name, ev.position AS evaluator_position, "
@@ -1006,7 +1097,15 @@ def pending_approvals():
             "JOIN employees e ON e.id = a.employee_id "
             "LEFT JOIN employees ev ON ev.id = a.evaluator_id "
             "JOIN performance_cycles c ON c.id = a.cycle_id "
-            "WHERE a.status IN ('submitted','in_review') ORDER BY a.submitted_at").fetchall())
+            "WHERE a.auto_score_source IS NULL AND a.status IN ('submitted','in_review') "
+        )
+
+        if not is_apex:
+            sql += "AND a.employee_id IN (SELECT employee_id FROM descendants) "
+
+        sql += "ORDER BY a.submitted_at"
+
+        rows = rows_to_list(db.execute(sql, params).fetchall())
         uid = g.user.get("employee_id")
         pending = []
         for r in rows:
@@ -1178,6 +1277,221 @@ def decide_assignment(assignment_id):
 
 
 # ---------------------------------------------------------------------------
+# Dept-head auto score (director-assigned, computed from plan performance)
+# ---------------------------------------------------------------------------
+# A department head gets no manual individual review; if a director wants to
+# assess one, the score is computed automatically from the department's
+# weekly-plan task completion (per the approved evaluation model).
+
+@bp.post("/evaluations/dept-auto-score")
+@login_required
+@roles_required("director", "admin", "executive")
+def assign_dept_auto_score():
+    data = request.get_json(force=True) or {}
+    dept_head_id = data.get("dept_head_id")
+    cycle_id = data.get("cycle_id")
+    if not dept_head_id or not cycle_id:
+        return jsonify({"error": "dept_head_id and cycle_id are required"}), 400
+
+    db = get_db()
+    try:
+        if _tier_of(db, dept_head_id) != "dept_head" or not _is_department_head(db, dept_head_id):
+            return jsonify({"error": "Target employee is not a department head"}), 400
+
+        cycle = db.execute(
+            "SELECT id, name FROM performance_cycles WHERE id=?", (cycle_id,)).fetchone()
+        if not cycle:
+            return jsonify({"error": "cycle not found"}), 404
+
+        week_start, _ = _get_week_bounds()
+        score = _department_plan_completion(db, dept_head_id, week_start)
+        if score is None:
+            return jsonify({"error": "Department head has no org unit to aggregate"}), 400
+
+        # Reuse an existing auto assignment for this dept head/cycle, if any.
+        existing = db.execute(
+            "SELECT id FROM evaluation_assignments "
+            "WHERE employee_id=? AND cycle_id=? AND auto_score_source='department_plan'",
+            (dept_head_id, cycle_id)).fetchone()
+
+        if existing:
+            db.execute(
+                "UPDATE evaluation_assignments SET score=?, overall_score=?, status='scored', "
+                "finalized_at=datetime('now') WHERE id=?",
+                (score, score, existing["id"]))
+            aid = existing["id"]
+            _log(db, "evaluation_assignment", aid, "update",
+                 new_value={"score": score, "source": "department_plan"},
+                 reason="dept head auto score refreshed from department plan performance")
+        else:
+            cur = db.execute(
+                "INSERT INTO evaluation_assignments "
+                "(form_id, employee_id, cycle_id, evaluator_type, evaluator_id, status, score, "
+                "max_score, overall_score, auto_score_source, finalized_at) "
+                "VALUES (NULL,?,?,'self',?,'scored',?,100,?,'department_plan',datetime('now'))",
+                (dept_head_id, cycle_id, dept_head_id, score, score))
+            aid = cur.lastrowid
+            _log(db, "evaluation_assignment", aid, "create",
+                 new_value={"employee_id": dept_head_id, "cycle_id": cycle_id,
+                            "score": score, "source": "department_plan", "assigned_by": g.user.get("employee_id")},
+                 reason="dept head auto score assigned by director from department plan performance")
+
+        name = db.execute(
+            "SELECT full_name FROM employees WHERE id=?", (dept_head_id,)).fetchone()
+        db.commit()
+        return jsonify({
+            "id": aid,
+            "employee_id": dept_head_id,
+            "full_name": name["full_name"] if name else None,
+            "cycle": cycle["name"],
+            "status": "scored",
+            "score": score,
+            "source": "department_plan",
+            "week_completion_pct": score,
+        })
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Dept-head batch approval
+# ---------------------------------------------------------------------------
+# A department head can approve, in one action, every pending evaluation of
+# the team members and team leaders inside their org subtree (subject to the
+# same per-level chain rules as a single decision).
+
+def _pending_in_scope(db, uid, form_levels=0):
+    """Submissions awaiting a decision where `uid` is an eligible approver for
+    the current level, across every assignment whose subject is in `uid`'s
+    dept scope. Skips auto-scored rows (they need no manual review)."""
+    me = db.execute(
+        "SELECT department_id FROM employees WHERE id=?", (uid,)).fetchone()
+    if not me or not me["department_id"]:
+        return []
+    unit_ids = subtree_unit_ids(db, me["department_id"])
+    if not unit_ids:
+        return []
+    marks = ",".join("?" * len(unit_ids))
+    subjects = db.execute(
+        f"SELECT id FROM employees WHERE employment_status='active' AND department_id IN ({marks})",
+        (*unit_ids,)).fetchall()
+    if not subjects:
+        return []
+
+    ids = []
+    for row in subjects:
+        subj_id = row["id"]
+        rows = db.execute(
+            "SELECT id FROM evaluation_assignments "
+            "WHERE employee_id=? AND status IN ('submitted','in_review') "
+            "AND COALESCE(auto_score_source,'')=''", (subj_id,)).fetchall()
+        for ar in rows:
+            detail = _assignment_detail(db, ar["id"])
+            if not detail:
+                continue
+            next_level = detail["current_level"] + 1
+            level_state = _level_state(db, ar["id"], subj_id,
+                                       detail["approval_levels"], next_level)
+            if uid in level_state["pending"] and _prior_levels_approved(
+                    db, ar["id"], subj_id, detail["approval_levels"], next_level):
+                ids.append(ar["id"])
+    return ids
+
+
+@bp.post("/evaluations/batch-decision")
+@login_required
+@roles_required("dept_head", "director", "admin", "executive")
+def batch_decide():
+    data = request.get_json(force=True) or {}
+    decision = data.get("decision")
+    comments = (data.get("comments") or "").strip()
+    if decision not in ("approve", "reject"):
+        return jsonify({"error": "decision must be 'approve' or 'reject'"}), 400
+    if not comments:
+        return jsonify({"error": "comments are required for every decision"}), 400
+
+    db = get_db()
+    try:
+        uid = g.user.get("employee_id")
+        candidate_ids = _pending_in_scope(db, uid)
+        if not candidate_ids:
+            return jsonify({"ok": True, "approved": 0, "rejected": 0, "processed": 0})
+
+        approved = 0
+        rejected = 0
+        for assignment_id in candidate_ids:
+            detail = _assignment_detail(db, assignment_id)
+            if not detail or detail["status"] not in ("submitted", "in_review"):
+                continue
+            next_level = detail["current_level"] + 1
+            form_levels = detail["approval_levels"]
+            effective_levels = detail["effective_levels"]
+            if next_level > effective_levels:
+                continue
+            level_state = _level_state(db, assignment_id, detail["employee_id"],
+                                       form_levels, next_level)
+            if uid not in level_state["pending"]:
+                continue
+            if not _prior_levels_approved(db, assignment_id, detail["employee_id"],
+                                          form_levels, next_level):
+                continue
+
+            db.execute(
+                "INSERT INTO evaluation_approvals (assignment_id, level, approver_id, decision, comments) "
+                "VALUES (?,?,?,?,?)",
+                (assignment_id, next_level, uid,
+                 "approved" if decision == "approve" else "rejected", comments))
+
+            if decision == "reject":
+                db.execute("UPDATE evaluation_assignments SET status='rejected' WHERE id=?",
+                           (assignment_id,))
+                _log(db, "evaluation_assignment", assignment_id, "update",
+                     new_value={"status": "rejected"},
+                     reason=f"batch-rejected at level {next_level}")
+                _notify(db, detail["employee_id"], "evaluation_rejected",
+                        "Evaluation returned",
+                        "Your evaluation was returned by your department head. Please review and resubmit.",
+                        "evaluation", assignment_id)
+                rejected += 1
+                continue
+
+            # Level completes only once every required approver approved.
+            level_state = _level_state(db, assignment_id, detail["employee_id"],
+                                       form_levels, next_level)
+            if not level_state["complete"]:
+                db.execute("UPDATE evaluation_assignments SET status='in_review' WHERE id=?",
+                           (assignment_id,))
+                db.commit()
+                approved += 1
+                continue
+
+            db.execute(
+                "UPDATE evaluation_assignments SET current_level=? WHERE id=?",
+                (next_level, assignment_id))
+            if next_level < effective_levels:
+                db.execute("UPDATE evaluation_assignments SET status='in_review' WHERE id=?",
+                           (assignment_id,))
+                db.commit()
+                approved += 1
+                continue
+
+            _finalize_scored(db, assignment_id, detail["status"], detail["current_level"],
+                             f"final level {next_level} approved (batch); score computed from form answers")
+            db.commit()
+            approved += 1
+
+        return jsonify({
+            "ok": True,
+            "approved": approved,
+            "rejected": rejected,
+            "processed": approved + rejected,
+            "decision": decision,
+        })
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # Admin: assignment CRUD (list / edit / delete)
 # ---------------------------------------------------------------------------
 
@@ -1192,7 +1506,7 @@ def all_assignments():
                "ev.full_name AS evaluator_name, "
                "d.name AS department_name, c.name AS cycle_name "
                "FROM evaluation_assignments a "
-               "JOIN evaluation_forms f ON f.id = a.form_id "
+               "LEFT JOIN evaluation_forms f ON f.id = a.form_id "
                "JOIN employees e ON e.id = a.employee_id "
                "LEFT JOIN employees ev ON ev.id = a.evaluator_id "
                "LEFT JOIN departments d ON d.id = e.department_id "

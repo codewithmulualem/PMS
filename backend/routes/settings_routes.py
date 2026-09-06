@@ -27,10 +27,16 @@ def get_weights():
 def update_weights():
     data = request.get_json(force=True) or {}
     cycle_id = data.get("cycle_id")
-    fields = ["kpi_weight", "goal_weight", "competency_weight", "behavior_weight", "project_weight"]
+    fields = ["kpi_weight", "goal_weight", "competency_weight", "behavior_weight", "program_weight"]
     weights = {f: data.get(f) for f in fields if data.get(f) is not None}
     if not weights:
         return jsonify({"error": "no weights provided"}), 400
+    try:
+        weights = {key: float(value) for key, value in weights.items()}
+    except (TypeError, ValueError):
+        return jsonify({"error": "weights must be numeric"}), 400
+    if any(value < 0 or value > 100 for value in weights.values()):
+        return jsonify({"error": "weights must be between 0 and 100"}), 400
     total = sum(weights.values())
     if abs(total - 100.0) > 1e-6:
         return jsonify({"error": f"weights must sum to 100% (got {round(total, 3)})"}), 400

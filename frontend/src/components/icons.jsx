@@ -279,4 +279,104 @@ export const Icons = {
       <path d="M8 11V7a4 4 0 0 1 8 0v4" />
     </Icon>
   ),
+  search: (p) => (
+    <Icon {...p}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </Icon>
+  ),
+  zoomIn: (p) => (
+    <Icon {...p}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="11" y1="8" x2="11" y2="14" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </Icon>
+  ),
+  zoomOut: (p) => (
+    <Icon {...p}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <line x1="8" y1="11" x2="14" y2="11" />
+    </Icon>
+  ),
+  refresh: (p) => (
+    <Icon {...p}>
+      <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" />
+      <path d="M3 21v-5h5" />
+    </Icon>
+  ),
+  filter: (p) => (
+    <Icon {...p}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </Icon>
+  ),
+  maximize: (p) => (
+    <Icon {...p}>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </Icon>
+  ),
+  minimize: (p) => (
+    <Icon {...p}>
+      <path d="M4 14h6v6m10-10h-6V4m0 6 7-7M9 15l-7 7" />
+    </Icon>
+  ),
+
+  // ── Org Chart tier icons ──────────────────────────────────────────────────
+
+  /** Authority / Root – classical crown */
+  crown: (p) => (
+    <Icon {...p}>
+      <path d="M3 19h18" />
+      <path d="M3 19 6 8l6 5 6-5 3 11" />
+      <circle cx="12" cy="5" r="1.5" fill="currentColor" stroke="none" />
+    </Icon>
+  ),
+
+  /** Directorate – office building */
+  building: (p) => (
+    <Icon {...p}>
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 21V9h6v12" />
+      <path d="M3 9h18" />
+      <rect x="9" y="3" width="6" height="6" />
+    </Icon>
+  ),
+
+  /** Department – stacked layers */
+  layers: (p) => (
+    <Icon {...p}>
+      <path d="M12 2 2 7l10 5 10-5-10-5Z" />
+      <path d="m2 12 10 5 10-5" />
+      <path d="m2 17 10 5 10-5" />
+    </Icon>
+  ),
+
+  /** Team / leaf – group of people */
+  teamGroup: (p) => (
+    <Icon {...p}>
+      <circle cx="9" cy="7" r="3" />
+      <path d="M3 21v-1a6 6 0 0 1 6-6" />
+      <circle cx="16" cy="7" r="3" />
+      <path d="M10 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1" />
+    </Icon>
+  ),
+
+  /** People mode – single person avatar */
+  personCircle: (p) => (
+    <Icon {...p}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="9" r="3" />
+      <path d="M6.2 19.4A6 6 0 0 1 12 15a6 6 0 0 1 5.8 4.4" />
+    </Icon>
+  ),
+
+  /** Star – head/highlighted node accent */
+  starFilled: (p) => (
+    <Icon {...p} fill="currentColor" stroke="none">
+      <path d="M12 2l2.9 6.2L22 9.3l-5 5 1.2 7-6.2-3.4L5.8 21.3l1.2-7-5-5 7.1-1.1z" />
+    </Icon>
+  ),
 };

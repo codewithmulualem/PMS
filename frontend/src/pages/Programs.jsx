@@ -8,14 +8,16 @@ import Modal from "../components/Modal";
 import Skeleton from "../components/Skeleton";
 import ScoreRing from "../components/ScoreRing";
 import { Icons } from "../components/icons";
+import { statusLabel } from "../i18n";
 
 const STATUS_COLORS = {
   planning: "var(--slate)", in_progress: "var(--indigo)", on_hold: "var(--amber)",
   completed: "var(--teal)", cancelled: "var(--muted)",
 };
 const ACTIVITY_STATUS = ["not_started", "in_progress", "on_hold", "completed"];
-const ACTIVITY_STATUS_LABELS = { not_started: "Not started", in_progress: "In progress", on_hold: "On hold", completed: "Completed" };
+const ACTIVITY_STATUS_LABELS = { not_started: "አልተጀመረም", in_progress: "በሂደት ላይ", on_hold: "ቆሟል", completed: "ተጠናቋል" };
 const KPI_TYPES = ["percentage", "numeric", "milestone"];
+const KPI_TYPE_LABELS = { percentage: "መቶኛ", numeric: "ቁጥር", milestone: "የደረጃ ምልክት" };
 const MAX_ACTIVITY_DEPTH = 5;
 
 function kpiAchievementPct(kpi) {
@@ -53,7 +55,10 @@ export default function Programs() {
   const { cycleId } = useCycle();
   const { user } = useAuth();
   const toast = useToast();
-  const isManager = user?.role === "manager" || user?.role === "admin" || user?.role === "executive";
+  const canCreateProgram = ["admin", "executive", "director"].includes(user?.role);
+  const canEditProgram = ["admin", "executive", "director"].includes(user?.role);
+  const canManageActivities = ["admin", "dept_head", "team_leader"].includes(user?.role);
+  const canAddTeamActivity = ["admin", "dept_head"].includes(user?.role);
 
   const [programs, setPrograms] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -66,22 +71,38 @@ export default function Programs() {
   const [progressActivity, setProgressActivity] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [loadError, setLoadError] = useState(null);
 
   const loadPrograms = useCallback(async () => {
+    setLoadError(null);
     try {
       const qs = cycleId ? `?cycle_id=${cycleId}` : "";
-      setPrograms(await api.get(`/programs${qs}`));
-    } catch (err) { toast.push(err.message, "error"); }
+      const rows = await api.get(`/programs${qs}`);
+      setPrograms(Array.isArray(rows) ? rows : []);
+      if (selectedId && !rows.some((p) => p.id === selectedId)) {
+        setSelectedId(null);
+        setDetail(null);
+      }
+    } catch (err) {
+      setPrograms([]);
+      setLoadError(err.message);
+      toast.push(err.message, "error");
+    }
   }, [cycleId]);
 
   const loadDetail = useCallback(async (id) => {
-    try { setDetail(await api.get(`/programs/${id}`)); } catch (err) { toast.push(err.message, "error"); }
+    try { setDetail(await api.get(`/programs/${id}`)); }
+    catch (err) {
+      setDetail(null);
+      setSelectedId(null);
+      toast.push(err.message, "error");
+    }
   }, []);
 
   useEffect(() => { loadPrograms(); }, [loadPrograms]);
   useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId, loadDetail]);
 
-  if (programs === null) return <Skeleton rows={6} />;
+  if (programs === null) return <Skeleton lines={6} />;
 
   const filtered = programs.filter((p) => {
     if (statusFilter !== "all" && p.status !== statusFilter) return false;
@@ -94,10 +115,10 @@ export default function Programs() {
 
   return (
     <>
-      <Topbar title={selectedId && detail ? detail.name : "Programs"}>
-        {isManager && !selectedId && (
+      <Topbar title={selectedId && detail ? detail.name : "ፕሮግራሞች"}>
+        {canCreateProgram && !selectedId && (
           <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
-            <Icons.plus size={14} /> New Program
+            <Icons.plus size={14} /> አዲስ ፕሮግራም
           </button>
         )}
       </Topbar>
@@ -107,34 +128,35 @@ export default function Programs() {
           <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
             <input
               className="input"
-              placeholder="Search programs…"
+              placeholder="ፕሮግራሞችን ፈልግ…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={{ flex: 1, maxWidth: 320 }}
             />
             <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 160 }}>
-              <option value="all">All statuses</option>
+              <option value="all">ሁሉም ሁኔታዎች</option>
               {["planning", "in_progress", "on_hold", "completed"].map((s) => (
-                <option key={s} value={s}>{s.replace("_", " ")}</option>
+                <option key={s} value={s}>{statusLabel(s)}</option>
               ))}
             </select>
           </div>
           <div className="card-stack">
-            {filtered.length === 0 && <div className="text-faint" style={{ padding: 20 }}>No programs{cycleId ? " in this cycle" : ""}{search ? " match your search" : ""}.</div>}
+            {loadError && <div className="error-banner">{loadError}</div>}
+            {filtered.length === 0 && !loadError && <div className="text-faint" style={{ padding: 20 }}>ምንም ፕሮግራም የለም።</div>}
             {filtered.map((p) => (
               <div key={p.id} className="card" style={{ cursor: "pointer" }} onClick={() => setSelectedId(p.id)}>
                 <div className="flex-between" style={{ marginBottom: 6 }}>
                   <div className="cell-strong">{p.name}</div>
-                  <span className="chip" style={{ color: STATUS_COLORS[p.status] || "var(--text)", borderColor: STATUS_COLORS[p.status] || "var(--border)" }}>{p.status}</span>
+                  <span className="chip" style={{ color: STATUS_COLORS[p.status] || "var(--text)", borderColor: STATUS_COLORS[p.status] || "var(--border)" }}>{statusLabel(p.status)}</span>
                 </div>
                 {p.description && <div className="text-faint" style={{ fontSize: 13, marginBottom: 6 }}>{p.description}</div>}
                 <div className="flex-between" style={{ fontSize: 13 }}>
-                  <span className="text-faint">Owner: {p.owner_name || "—"}</span>
-                  <span className="text-faint">{p.completed_activities}/{p.activity_count} activities</span>
+                  <span className="text-faint">ባለቤት፦ {p.owner_name || "—"}</span>
+                  <span className="text-faint">{p.completed_activities}/{p.activity_count} ተግባራት</span>
                 </div>
                 {p.activity_count > 0 && (
                   <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-dim)" }}>
-                    {p.completed_activities} of {p.activity_count} activities completed ({Math.round(p.completed_activities / p.activity_count * 100)}%)
+                    {p.completed_activities} ከ {p.activity_count} ተግባራት ተጠናቀዋል ({Math.round(p.completed_activities / p.activity_count * 100)}%)
                   </div>
                 )}
               </div>
@@ -143,7 +165,7 @@ export default function Programs() {
         </>
       )}
 
-      {selectedId && !detail && <Skeleton rows={4} />}
+      {selectedId && !detail && <Skeleton lines={4} />}
 
       {selectedId && detail && (
         <ProgramDetail
@@ -151,7 +173,8 @@ export default function Programs() {
           onBack={() => { setSelectedId(null); setDetail(null); }}
           onRefresh={() => loadDetail(selectedId)}
           onListRefresh={loadPrograms}
-          isManager={isManager} toast={toast} user={user}
+          canManageActivities={canManageActivities} canEditProgram={canEditProgram}
+          canAddTeamActivity={canAddTeamActivity} toast={toast} user={user}
           addingActivity={addingActivity} setAddingActivity={setAddingActivity}
           editActivity={editActivity} setEditActivity={setEditActivity}
           editKpi={editKpi} setEditKpi={setEditKpi}
@@ -165,7 +188,7 @@ export default function Programs() {
   );
 }
 
-function ProgramDetail({ program, onBack, onRefresh, onListRefresh, isManager, toast, user, addingActivity, setAddingActivity, editActivity, setEditActivity, editKpi, setEditKpi, progressActivity, setProgressActivity, editProj, setEditProj }) {
+function ProgramDetail({ program, onBack, onRefresh, onListRefresh, canManageActivities, canEditProgram, canAddTeamActivity, toast, user, addingActivity, setAddingActivity, editActivity, setEditActivity, editKpi, setEditKpi, progressActivity, setProgressActivity, editProj, setEditProj }) {
   const [scoreData, setScoreData] = useState(null);
   const [loadingScore, setLoadingScore] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -183,10 +206,10 @@ function ProgramDetail({ program, onBack, onRefresh, onListRefresh, isManager, t
   }, [onRefresh, refreshScore]);
 
   async function deleteProgram() {
-    if (!window.confirm("Delete this program and all its activities? This cannot be undone.")) return;
+    if (!window.confirm("ይህን ፕሮግራም እና ሁሉንም ተግባሮቹን ማጥፋት ይፈልጋሉ? ይህ እርምጃ አይመለስም።")) return;
     try {
       await api.delete(`/programs/${program.id}`);
-      toast.push("Program deleted", "success");
+      toast.push("ፕሮግራሙ ተሰርዟል", "success");
       onBack();
       if (onListRefresh) onListRefresh();
     } catch (err) { toast.push(err.message, "error"); }
@@ -199,12 +222,12 @@ function ProgramDetail({ program, onBack, onRefresh, onListRefresh, isManager, t
   return (
     <>
       <div className="flex-between" style={{ marginBottom: 12 }}>
-        <button className="btn btn-sm" onClick={onBack}><Icons.chevronLeft size={14} /> Back</button>
-        {isManager && (
+            <button className="btn btn-sm" onClick={onBack}><Icons.chevronLeft size={14} /> ተመለስ</button>
+        {canEditProgram && (
           <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-sm" onClick={() => setEditProj(program)} title="Edit program"><Icons.edit size={14} /></button>
+            <button className="btn btn-sm" onClick={() => setEditProj(program)} title="ፕሮግራም አርትዕ"><Icons.edit size={14} /></button>
             {canDelete && (
-              <button className="btn btn-sm" onClick={() => setConfirmDelete(true)} title="Delete program" style={{ color: "var(--rose)" }}><Icons.trash size={14} /></button>
+              <button className="btn btn-sm" onClick={() => setConfirmDelete(true)} title="ፕሮግራም ሰርዝ" style={{ color: "var(--rose)" }}><Icons.trash size={14} /></button>
             )}
           </div>
         )}
@@ -214,53 +237,53 @@ function ProgramDetail({ program, onBack, onRefresh, onListRefresh, isManager, t
         <div className="cell-strong" style={{ fontSize: 18, marginBottom: 4 }}>{program.name}</div>
         {program.description && <div className="text-faint" style={{ marginBottom: 8 }}>{program.description}</div>}
         <div className="text-faint" style={{ fontSize: 13 }}>
-          Owner: {program.owner_name || "—"} · Status: <span style={{ color: STATUS_COLORS[program.status] }}>{program.status}</span>
-          {program.start_date && ` · Start: ${program.start_date}`}{program.due_date && ` · Due: ${program.due_date}`}
-          {program.weight > 1 && ` · Weight: ${program.weight}`}
+          ባለቤት፦ {program.owner_name || "—"} · ሁኔታ፦ <span style={{ color: STATUS_COLORS[program.status] }}>{statusLabel(program.status)}</span>
+          {program.start_date && ` · መጀመሪያ፦ ${program.start_date}`}{program.due_date && ` · መጨረሻ፦ ${program.due_date}`}
+          {program.weight > 1 && ` · ክብደት፦ ${program.weight}`}
         </div>
 
-        {loadingScore && <div className="text-faint" style={{ marginTop: 10, fontSize: 13 }}>Computing score…</div>}
+        {loadingScore && <div className="text-faint" style={{ marginTop: 10, fontSize: 13 }}>ነጥብ በማስላት ላይ…</div>}
         {scoreData && scoreData.score != null && (
           <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 10 }}>
             <ScoreRing score={scoreData.score} size={40} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600 }}>{scoreData.score}%</div>
-              <div className="text-faint" style={{ fontSize: 12 }}>Automated KPI-derived accomplishment</div>
+              <div className="text-faint" style={{ fontSize: 12 }}>በKPI የተሰላ አፈጻጸም</div>
             </div>
           </div>
         )}
         {scoreData && scoreData.score == null && (
-          <div className="text-faint" style={{ marginTop: 10, fontSize: 13 }}>No scored activities yet — assign activities with KPIs to generate a score.</div>
+          <div className="text-faint" style={{ marginTop: 10, fontSize: 13 }}>እስካሁን ነጥብ የተሰጠው ተግባር የለም። ነጥብ ለማስላት KPI ያላቸውን ተግባሮች ይመድቡ።</div>
         )}
       </div>
 
-      {isManager && (
+      {canAddTeamActivity && (
         <div style={{ marginBottom: 10 }}>
-          <button className="btn btn-sm btn-primary" onClick={() => setAddingActivity("root")}><Icons.plus size={14} /> Add Activity</button>
+          <button className="btn btn-sm btn-primary" onClick={() => setAddingActivity("root")}><Icons.plus size={14} /> ተግባር ጨምር</button>
         </div>
       )}
 
-      {(!program.activities || program.activities.length === 0) && <div className="text-faint" style={{ padding: 12 }}>No activities yet.</div>}
+      {(!program.activities || program.activities.length === 0) && <div className="text-faint" style={{ padding: 12 }}>እስካሁን ምንም ተግባር የለም።</div>}
       {program.activities && program.activities.map((t) => (
-        <TaskNode key={t.id} activity={t} depth={0} isManager={isManager} toast={toast} user={user}
+        <TaskNode key={t.id} activity={t} depth={0} isManager={canManageActivities} toast={toast} user={user}
           onRefresh={wrappedRefresh} setAddingActivity={setAddingActivity} setEditActivity={setEditActivity} setEditKpi={setEditKpi} setProgressActivity={setProgressActivity} />
       ))}
 
       {confirmDelete && (
-        <Modal title="Delete Program" onClose={() => setConfirmDelete(false)}>
-          <p style={{ fontSize: 14, marginBottom: 12 }}>Are you sure you want to delete <strong>{program.name}</strong> and all its activities? This cannot be undone.</p>
+          <Modal title="ፕሮግራም ሰርዝ" onClose={() => setConfirmDelete(false)}>
+          <p style={{ fontSize: 14, marginBottom: 12 }}>ይህን <strong>{program.name}</strong> ፕሮግራም እና ሁሉንም ተግባሮቹን ማጥፋት ይፈልጋሉ? ይህ እርምጃ አይመለስም።</p>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-primary" onClick={deleteProgram} style={{ background: "var(--rose)" }}>Delete</button>
-            <button className="btn btn-sm" onClick={() => setConfirmDelete(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={deleteProgram} style={{ background: "var(--rose)" }}>ሰርዝ</button>
+            <button className="btn btn-sm" onClick={() => setConfirmDelete(false)}>ዝጋ</button>
           </div>
         </Modal>
       )}
 
-      {addingActivity === "root" && <TaskForm programId={program.id} onClose={() => setAddingActivity(null)} onSaved={() => { setAddingActivity(null); wrappedRefresh(); }} toast={toast} />}
+      {addingActivity === "root" && <TaskForm programId={program.id} role={user?.role} onClose={() => setAddingActivity(null)} onSaved={() => { setAddingActivity(null); wrappedRefresh(); }} toast={toast} />}
       {addingActivity && addingActivity !== "root" && (
-        <TaskForm parentId={addingActivity} programId={program.id} onClose={() => setAddingActivity(null)} onSaved={() => { setAddingActivity(null); wrappedRefresh(); }} toast={toast} />
+        <TaskForm parentId={addingActivity} programId={program.id} role={user?.role} onClose={() => setAddingActivity(null)} onSaved={() => { setAddingActivity(null); wrappedRefresh(); }} toast={toast} />
       )}
-      {editActivity && <TaskForm activity={editActivity} programId={program.id} onClose={() => setEditActivity(null)} onSaved={() => { setEditActivity(null); wrappedRefresh(); }} toast={toast} />}
+      {editActivity && <TaskForm activity={editActivity} programId={program.id} role={user?.role} onClose={() => setEditActivity(null)} onSaved={() => { setEditActivity(null); wrappedRefresh(); }} toast={toast} />}
       {progressActivity && <ProgressForm activity={progressActivity} onClose={() => setProgressActivity(null)} onSaved={() => { setProgressActivity(null); wrappedRefresh(); }} toast={toast} />}
       {editKpi && <KpiForm kpi={editKpi} onClose={() => setEditKpi(null)} onSaved={() => { setEditKpi(null); wrappedRefresh(); }} toast={toast} />}
       {editProj && <ProgramForm program={editProj} onClose={() => setEditProj(null)} onSaved={() => { setEditProj(null); wrappedRefresh(); }} toast={toast} />}
@@ -301,24 +324,29 @@ function TaskNode({ activity, depth, isManager, toast, user, onRefresh, setAddin
           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{pct}%</span>
           {isManager && (
             <>
-              <button className="btn btn-sm" onClick={() => setEditActivity(activity)} title="Edit"><Icons.edit size={13} /></button>
+              <button className="btn btn-sm" onClick={() => setEditActivity(activity)} title="አርትዕ"><Icons.edit size={13} /></button>
               {canAddSubactivity
-                ? <button className="btn btn-sm" onClick={() => setAddingActivity(activity.id)} title="Add subactivity"><Icons.plus size={13} /></button>
-                : <span title="Maximum nesting depth reached" style={{ cursor: "not-allowed", opacity: 0.35 }}><Icons.plus size={13} /></span>
+                ? <button className="btn btn-sm" onClick={() => setAddingActivity(activity.id)} title="ንዑስ ተግባር ጨምር"><Icons.plus size={13} /></button>
+                : <span title="ከፍተኛው የመደራረብ ደረጃ ደርሷል" style={{ cursor: "not-allowed", opacity: 0.35 }}><Icons.plus size={13} /></span>
               }
               {(!activity.kpis || activity.kpis.length === 0) && (
-                <button className="btn btn-sm" onClick={() => setProgressActivity(activity)} title="Log progress"><Icons.chart size={13} /></button>
+                <button className="btn btn-sm" onClick={() => setProgressActivity(activity)} title="አፈጻጸም መዝግብ"><Icons.chart size={13} /></button>
               )}
-              <button className="btn btn-sm" onClick={() => deleteActivity(activity.id, toast, onRefresh)} title="Delete activity"><Icons.trash size={13} /></button>
+              <button className="btn btn-sm" onClick={() => deleteActivity(activity.id, toast, onRefresh)} title="ተግባር ሰርዝ"><Icons.trash size={13} /></button>
             </>
           )}
-          <button className="btn btn-sm" onClick={toggleHistory} title="Progress history"><Icons.clock size={13} /></button>
+          <button className="btn btn-sm" onClick={toggleHistory} title="የአፈጻጸም ታሪክ"><Icons.clock size={13} /></button>
         </div>
       </div>
       <div className="text-faint" style={{ fontSize: 12, marginLeft: 26 }}>
-        {activity.assignee_name ? `Assigned to: ${activity.assignee_name}` : "Unassigned"}
-        {activity.weight > 1 ? ` · Weight: ${activity.weight}` : ""}
-        {activity.assigned_by_name ? ` · Delegated by: ${activity.assigned_by_name}` : ""}
+        {activity.assignee_name ? `ተመድቧል፦ ${activity.assignee_name}` : (activity.org_unit_name ? `ቡድን፦ ${activity.org_unit_name}` : "አልተመደበም")}
+        {activity.weight > 1 ? ` · ክብደት፦ ${activity.weight}` : ""}
+        {activity.assigned_by_name ? ` · የመደበው፦ ${activity.assigned_by_name}` : ""}
+        {activity.strategic_goal_title && (
+          <span className="chip" style={{ fontSize: 11, marginLeft: 6, color: "var(--indigo)", borderColor: "var(--indigo)" }}>
+            የሚያገለግለው፦ {activity.strategic_goal_title}{activity.strategic_goal_scope ? ` (${activity.strategic_goal_scope})` : ""}
+          </span>
+        )}
       </div>
 
       {open && (
@@ -328,7 +356,7 @@ function TaskNode({ activity, depth, isManager, toast, user, onRefresh, setAddin
             ))}
           {isManager && (
             <button className="btn btn-sm" style={{ marginTop: 4 }} onClick={() => setEditKpi({ activity_id: activity.id })}>
-              <Icons.plus size={12} /> Add KPI
+              <Icons.plus size={12} /> KPI ጨምር
             </button>
           )}
           {hasChildren && activity.children.map((c) => (
@@ -337,8 +365,8 @@ function TaskNode({ activity, depth, isManager, toast, user, onRefresh, setAddin
           ))}
           {history && (
             <div style={{ marginTop: 6, padding: 8, background: "var(--bg-muted)", borderRadius: 6, fontSize: 12 }}>
-              <div style={{ fontWeight: 500, marginBottom: 4 }}>Progress History</div>
-              {history.length === 0 && <div className="text-faint">No entries yet.</div>}
+              <div style={{ fontWeight: 500, marginBottom: 4 }}>የአፈጻጸም ታሪክ</div>
+              {history.length === 0 && <div className="text-faint">እስካሁን መዝገብ የለም።</div>}
               {history.map((h) => (
                 <div key={h.id} style={{ padding: "2px 0", borderBottom: "1px solid var(--border-light)" }}>
                   <span style={{ fontWeight: 500 }}>{h.progress_pct}%</span>
@@ -356,11 +384,11 @@ function TaskNode({ activity, depth, isManager, toast, user, onRefresh, setAddin
 }
 
 const PROGRESS_OPTIONS = [
-  { label: "Not started", value: 0 },
+  { label: "አልተጀመረም", value: 0 },
   { label: "25%", value: 25 },
   { label: "50%", value: 50 },
   { label: "75%", value: 75 },
-  { label: "Done", value: 100 },
+  { label: "ተጠናቋል", value: 100 },
 ];
 
 function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }) {
@@ -375,17 +403,17 @@ function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }
     const newVal = kpi.target_value ? (kpi.target_value * pct) / 100 : (pct >= 100 ? 1 : 0);
     try {
       await api.put(`/programs/kpis/${kpi.id}`, { actual_value: newVal });
-      toast.push(`Progress set to ${pct}%`, "success");
+      toast.push(`አፈጻጸም ${pct}% ሆኖ ተመዝግቧል`, "success");
       if (onRefresh) onRefresh();
     } catch (err) { toast.push(err.message, "error"); }
   }
 
   async function deleteKpi(e) {
     e.stopPropagation();
-    if (!window.confirm(`Delete KPI "${kpi.name}"?`)) return;
+    if (!window.confirm(`KPI "${kpi.name}" ይሰረዝ?`)) return;
     try {
       await api.delete(`/programs/kpis/${kpi.id}`);
-      toast.push("KPI deleted", "success");
+      toast.push("KPI ተሰርዟል", "success");
       if (onRefresh) onRefresh();
     } catch (err) { toast.push(err.message, "error"); }
   }
@@ -394,7 +422,7 @@ function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13, borderBottom: "1px solid var(--border-light)" }}>
         <span style={{ fontWeight: 500 }}>{kpi.name}</span>
-        <span className="chip" style={{ fontSize: 11 }}>milestone</span>
+        <span className="chip" style={{ fontSize: 11 }}>የደረጃ ምልክት</span>
         {canProgress ? (
           <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
             {PROGRESS_OPTIONS.map((opt) => (
@@ -407,24 +435,24 @@ function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }
         ) : (
           <>
             {currentPct >= 100
-              ? <span className="chip chip-success" style={{ fontSize: 11 }}>complete</span>
-              : <span className="chip chip-warning" style={{ fontSize: 11 }}>incomplete</span>}
+              ? <span className="chip chip-success" style={{ fontSize: 11 }}>ተጠናቋል</span>
+              : <span className="chip chip-warning" style={{ fontSize: 11 }}>አልተጠናቀቀም</span>}
           </>
         )}
         {isManager && (
           <span style={{ display: "flex", gap: 4 }}>
-            <button className="btn btn-sm" onClick={() => setEditKpi(kpi)} title="Edit KPI"><Icons.edit size={12} /></button>
-            <button className="btn btn-sm" onClick={deleteKpi} title="Delete KPI" style={{ color: "var(--rose)" }}><Icons.trash size={12} /></button>
+            <button className="btn btn-sm" onClick={() => setEditKpi(kpi)} title="KPI አርትዕ"><Icons.edit size={12} /></button>
+            <button className="btn btn-sm" onClick={deleteKpi} title="KPI ሰርዝ" style={{ color: "var(--rose)" }}><Icons.trash size={12} /></button>
           </span>
         )}
       </div>
     );
   }
-  const dirLabel = kpi.direction === "lower_is_better" ? "lower better" : kpi.direction === "target_is_best" ? "target best" : "higher better";
+  const dirLabel = kpi.direction === "lower_is_better" ? "ዝቅ ያለ ይሻላል" : kpi.direction === "target_is_best" ? "የታለመው ይሻላል" : "ከፍ ያለ ይሻላል";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13, borderBottom: "1px solid var(--border-light)" }}>
       <span style={{ fontWeight: 500 }}>{kpi.name}</span>
-      <span className="chip" style={{ fontSize: 11 }}>{kpi.kpi_type}</span>
+      <span className="chip" style={{ fontSize: 11 }}>{KPI_TYPE_LABELS[kpi.kpi_type] || kpi.kpi_type}</span>
       <span className="text-faint" style={{ fontSize: 11 }}>{dirLabel}</span>
       {kpi.actual_value != null && kpi.target_value && (
         <span className="text-faint">{kpi.actual_value}/{kpi.target_value}{kpi.unit ? ` ${kpi.unit}` : ""}</span>
@@ -441,8 +469,8 @@ function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }
         </span>
       ) : isManager ? (
         <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
-          <button className="btn btn-sm" onClick={() => setEditKpi(kpi)} title="Edit KPI"><Icons.edit size={12} /></button>
-          <button className="btn btn-sm" onClick={deleteKpi} title="Delete KPI" style={{ color: "var(--rose)" }}><Icons.trash size={12} /></button>
+          <button className="btn btn-sm" onClick={() => setEditKpi(kpi)} title="KPI አርትዕ"><Icons.edit size={12} /></button>
+          <button className="btn btn-sm" onClick={deleteKpi} title="KPI ሰርዝ" style={{ color: "var(--rose)" }}><Icons.trash size={12} /></button>
         </span>
       ) : null}
     </div>
@@ -450,8 +478,8 @@ function KpiRow({ kpi, isManager, setEditKpi, onRefresh, toast, user, activity }
 }
 
 async function deleteActivity(id, toast, onRefresh) {
-  if (!window.confirm("Delete this activity and all subactivities?")) return;
-  try { await api.delete(`/programs/activities/${id}`); toast.push("Activity deleted", "success"); onRefresh(); }
+  if (!window.confirm("ይህ ተግባር እና ሁሉም ንዑስ ተግባሮቹ ይሰረዙ?")) return;
+  try { await api.delete(`/programs/activities/${id}`); toast.push("ተግባሩ ተሰርዟል", "success"); onRefresh(); }
   catch (err) { toast.push(err.message, "error"); }
 }
 
@@ -471,96 +499,194 @@ function ProgramForm({ program, onClose, onSaved, toast, cycleId }) {
       const body = { name, description: desc, status, due_date: due || null, weight: Number(weight) };
       if (program) await api.put(`/programs/${program.id}`, body);
       else await api.post("/programs", { ...body, cycle_id: cycleId });
-      toast.push(program ? "Program updated" : "Program created", "success"); onSaved();
+      toast.push(program ? "ፕሮግራሙ ተሻሽሏል" : "ፕሮግራሙ ተፈጥሯል", "success"); onSaved();
     } catch (err) { toast.push(err.message, "error"); } finally { setSaving(false); }
   }
 
   return (
-    <Modal title={program ? "Edit Program" : "New Program"} onClose={onClose}>
+    <Modal title={program ? "ፕሮግራም አርትዕ" : "አዲስ ፕሮግራም"} onClose={onClose}>
       <form onSubmit={submit}>
-        <div className="field"><label>Program name</label><input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Clear ESIA Backlog" /></div>
-        <div className="field"><label>Description</label><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} placeholder="Scope and objectives…" /></div>
+        <div className="field"><label>የፕሮግራም ስም</label><input value={name} onChange={(e) => setName(e.target.value)} required placeholder="ለምሳሌ፦ የESIA የሥራ ዝርዝር ማጽዳት" /></div>
+        <div className="field"><label>መግለጫ</label><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3} placeholder="ወሰን እና ዓላማዎች…" /></div>
         <div className="grid grid-3">
           <div className="field">
-            <label>Status</label>
+            <label>ሁኔታ</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
-              {["planning", "in_progress", "on_hold", "completed", "cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
+              {["planning", "in_progress", "on_hold", "completed", "cancelled"].map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
           </div>
-          <div className="field"><label>Due date</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
-          <div className="field"><label>Weight</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
+          <div className="field"><label>የመጨረሻ ቀን</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+          <div className="field"><label>ክብደት</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={saving || !name}>{saving ? "Saving…" : program ? "Update" : "Create"}</button>
-          <button className="btn btn-sm" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" type="submit" disabled={saving || !name}>{saving ? "በማስቀመጥ ላይ…" : program ? "አሻሽል" : "ፍጠር"}</button>
+          <button className="btn btn-sm" type="button" onClick={onClose}>ሰርዝ</button>
         </div>
       </form>
     </Modal>
   );
 }
 
-function TaskForm({ activity, parentId, programId, onClose, onSaved, toast }) {
+function TaskForm({ activity, parentId, programId, role, onClose, onSaved, toast }) {
+  const isEdit = !!activity?.id;
+  const parentForSubmit = parentId === "root" ? null : (parentId ?? (activity?.parent_id || null));
+  const canAssignTeams = ["dept_head", "admin"].includes(role);
+  const showAssignee = role === "team_leader" || !!activity?.assignee_id;
+
   const [title, setTitle] = useState(activity?.title || "");
   const [desc, setDesc] = useState(activity?.description || "");
-  const [assignee, setAssignee] = useState(activity?.assignee_id || "");
   const [status, setStatus] = useState(activity?.status || "not_started");
   const [weight, setWeight] = useState(activity?.weight ?? 1);
   const [startDate, setStartDate] = useState(activity?.start_date || "");
   const [due, setDue] = useState(activity?.due_date || "");
   const [saving, setSaving] = useState(false);
-  const [assignable, setAssignable] = useState([]);
-  const [assignErr, setAssignErr] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [team, setTeam] = useState(activity?.org_unit_id || "");
+  const [members, setMembers] = useState([]);
+  const [assignee, setAssignee] = useState(activity?.assignee_id || "");
+  const [kpis, setKpis] = useState(activity?.kpis || []);
+  const [goals, setGoals] = useState([]);
+  const [goal, setGoal] = useState(activity?.strategic_goal_id || "");
+  const [errMsg, setErrMsg] = useState(null);
 
   useEffect(() => {
-    api.get("/programs/assignable").then(setAssignable).catch((err) => setAssignErr(err.message));
-  }, []);
+    if (canAssignTeams) {
+      api.get("/programs/assignable-teams").then(setTeams).catch((err) => setErrMsg(err.message));
+    }
+  }, [canAssignTeams]);
+
+  useEffect(() => {
+    if (showAssignee) {
+      api.get("/strategic-goals/team")
+        .then((d) => setMembers(d.members || []))
+        .catch((err) => setErrMsg(err.message));
+    }
+  }, [showAssignee]);
+
+  useEffect(() => {
+    const q = [];
+    if (team) q.push(`org_unit_id=${team}`);
+    else if (assignee) q.push(`assignee_id=${assignee}`);
+    api.get(`/programs/${programId}/assignable-goals${q.length ? `?${q.join("&")}` : ""}`)
+      .then((rows) => {
+        let list = rows || [];
+        if (activity?.strategic_goal_id && !list.some((g) => g.id === activity.strategic_goal_id)) {
+          list = [{ id: activity.strategic_goal_id, title: activity.strategic_goal_title || "የአሁኑ ግብ", scope: activity.strategic_goal_scope || "" }, ...list];
+        }
+        setGoals(list);
+        setErrMsg(null);
+      })
+      .catch((err) => setErrMsg(err.message));
+  }, [programId, team, assignee]);
+
+  function updateKpi(idx, patch) {
+    setKpis((prev) => prev.map((k, i) => (i === idx ? { ...k, ...patch } : k)));
+  }
 
   async function submit(e) {
     e.preventDefault(); setSaving(true);
     try {
       const body = {
         title, description: desc || null,
+        org_unit_id: team ? Number(team) : null,
         assignee_id: assignee ? Number(assignee) : null,
         status, weight: Number(weight),
         start_date: startDate || null, due_date: due || null,
-        parent_id: activity ? (activity.parent_id || null) : (parentId !== "root" ? parentId : null),
+        strategic_goal_id: goal ? Number(goal) : null,
+        parent_id: parentForSubmit,
       };
-      if (activity) await api.put(`/programs/activities/${activity.id}`, body);
+      if (!isEdit && kpis.length > 0) {
+        body.kpis = kpis.map((k) => ({
+          name: k.name,
+          kpi_type: k.kpi_type || "numeric",
+          target_value: k.target_value === "" ? null : Number(k.target_value),
+          actual_value: k.actual_value === "" ? null : Number(k.actual_value),
+          weight: Number(k.weight || 1),
+        }));
+      }
+      if (isEdit) await api.put(`/programs/activities/${activity.id}`, body);
       else await api.post(`/programs/${programId}/activities`, body);
-      toast.push(activity ? "Task updated" : "Task added", "success"); onSaved();
+      toast.push(isEdit ? "ተግባሩ ተሻሽሏል" : "ተግባሩ ተጨምሯል", "success"); onSaved();
     } catch (err) { toast.push(err.message, "error"); } finally { setSaving(false); }
   }
 
   return (
-    <Modal title={activity ? "Edit Task" : "Add Activity"} onClose={onClose}>
+    <Modal title={isEdit ? "ተግባር አርትዕ" : "ተግባር ጨምር"} onClose={onClose}>
       <form onSubmit={submit}>
-        <div className="field"><label>Title</label><input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="e.g. Design landing page" /></div>
-        <div className="field"><label>Description</label><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="Details…" /></div>
+        <div className="field"><label>ርዕስ</label><input value={title} onChange={(e) => setTitle(e.target.value)} required placeholder="ለምሳሌ፦ የESIA የመስክ ምርመራ" /></div>
+        <div className="field"><label>መግለጫ</label><textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="ዝርዝሮች…" /></div>
         <div className="grid grid-2">
           <div className="field">
-            <label>Status</label>
+            <label>ሁኔታ</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               {ACTIVITY_STATUS.map((s) => <option key={s} value={s}>{ACTIVITY_STATUS_LABELS[s]}</option>)}
             </select>
           </div>
-          <div className="field"><label>Weight</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
+          <div className="field"><label>ክብደት</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
         </div>
-        <div className="grid grid-2">
+        {canAssignTeams && (
           <div className="field">
-            <label>Assign to (direct reports)</label>
-            <select value={assignee} onChange={(e) => setAssignee(e.target.value || "")}>
-              <option value="">Unassigned</option>
-              {assignable.map((e) => <option key={e.id} value={e.id}>{e.full_name}{e.department_name ? ` (${e.department_name})` : ""}</option>)}
+            <label>የተመደበ ቡድን</label>
+            <select value={team} onChange={(e) => setTeam(e.target.value || "")}>
+              <option value="">ቡድን ይምረጡ…</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            {assignErr && <span className="hint" style={{ color: "var(--rose)" }}>{assignErr}</span>}
-            {!assignErr && assignable.length === 0 && <span className="hint">No direct reports found</span>}
           </div>
-          <div className="field"><label>Due date</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+        )}
+        {showAssignee && (
+          <div className="field">
+            <label>ለ (የቡድን አባል) መድብ</label>
+            <select value={assignee} onChange={(e) => setAssignee(e.target.value || "")}>
+              <option value="">አባል ይምረጡ…</option>
+              {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}{m.position ? ` (${m.position})` : ""}</option>)}
+            </select>
+            {members.length === 0 && role === "team_leader" && <span className="hint">የቡድንዎ አባላት እየተጫኑ ነው…</span>}
+          </div>
+        )}
+        {canAssignTeams && !showAssignee && (
+          <div className="field"><label>የመጨረሻ ቀን</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+        )}
+        {!canAssignTeams && !showAssignee && (
+          <div className="field"><label>የመጨረሻ ቀን</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+        )}
+        {showAssignee && (
+          <div className="field"><label>የመጨረሻ ቀን</label><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+        )}
+        <div className="field">
+          <label>የሚያገለግለው ግብ / ዕቅድ (አማራጭ)</label>
+          <select value={goal} onChange={(e) => setGoal(e.target.value || "")}>
+            <option value="">የለም</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>{g.title}{g.scope ? ` (${g.scope})` : ""}</option>
+            ))}
+          </select>
+          {errMsg && <span className="hint" style={{ color: "var(--rose)" }}>{errMsg}</span>}
+          {!errMsg && goals.length === 0 && <span className="hint">በዚህ ወሰን ውስጥ እስካሁን ግብ የለም።</span>}
         </div>
-        <div className="field"><label>Start date</label><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
+        {canAssignTeams && (
+          <div className="field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <label style={{ margin: 0 }}>የውጤት KPIዎች</label>
+              <button type="button" className="btn btn-sm" onClick={() => setKpis([...kpis, { name: "", kpi_type: "numeric", target_value: "", actual_value: "", weight: 1 }])}><Icons.plus size={12} /> KPI ጨምር</button>
+            </div>
+            {kpis.map((k, i) => (
+              <div key={i} className="grid grid-3" style={{ marginBottom: 6 }}>
+                <input className="input" placeholder="የKPI ስም" value={k.name} onChange={(e) => updateKpi(i, { name: e.target.value })} />
+                <select className="input" value={k.kpi_type} onChange={(e) => updateKpi(i, { kpi_type: e.target.value })}>
+                  {KPI_TYPES.map((t) => <option key={t} value={t}>{KPI_TYPE_LABELS[t]}</option>)}
+                </select>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <input className="input" type="number" placeholder="ዒላማ" value={k.target_value} onChange={(e) => updateKpi(i, { target_value: e.target.value })} />
+                  <input className="input" type="number" placeholder="ትክክለኛ" value={k.actual_value} onChange={(e) => updateKpi(i, { actual_value: e.target.value })} />
+                  <button type="button" className="btn btn-sm" title="አስወግድ" aria-label="አስወግድ" style={{ color: "var(--rose)" }} onClick={() => setKpis(kpis.filter((_, j) => j !== i))}><Icons.trash size={12} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={saving || !title}>{saving ? "Saving…" : activity ? "Update" : "Add"}</button>
-          <button className="btn btn-sm" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" type="submit" disabled={saving || !title}>{saving ? "በማስቀመጥ ላይ…" : isEdit ? "አሻሽል" : "ጨምር"}</button>
+          <button className="btn btn-sm" type="button" onClick={onClose}>ዝጋ</button>
         </div>
       </form>
     </Modal>
@@ -589,39 +715,39 @@ function KpiForm({ kpi, onClose, onSaved, toast }) {
       };
       if (kpi?.id) await api.put(`/programs/kpis/${kpi.id}`, body);
       else await api.post(`/programs/activities/${kpi.activity_id}/kpis`, body);
-      toast.push(kpi?.id ? "KPI updated" : "KPI added", "success"); onSaved();
+      toast.push(kpi?.id ? "KPI ተሻሽሏል" : "KPI ተጨምሯል", "success"); onSaved();
     } catch (err) { toast.push(err.message, "error"); } finally { setSaving(false); }
   }
 
   return (
-    <Modal title={isNew ? "Add Activity KPI" : "Edit KPI"} onClose={onClose}>
+    <Modal title={isNew ? "የተግባር KPI ጨምር" : "KPI አርትዕ"} onClose={onClose}>
       <form onSubmit={submit}>
-        <div className="field"><label>Name</label><input value={name} onChange={(e) => setName(e.target.value)} required placeholder="e.g. Story points delivered" /></div>
+        <div className="field"><label>ስም</label><input value={name} onChange={(e) => setName(e.target.value)} required placeholder="ለምሳሌ፦ የተላለፉ የሥራ ነጥቦች" /></div>
         <div className="grid grid-2">
           <div className="field">
-            <label>Type</label>
+            <label>ዓይነት</label>
             <select value={kpiType} onChange={(e) => setKpiType(e.target.value)}>
-              {KPI_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              {KPI_TYPES.map((t) => <option key={t} value={t}>{KPI_TYPE_LABELS[t]}</option>)}
             </select>
           </div>
           <div className="field">
-            <label>Direction</label>
+            <label>አቅጣጫ</label>
             <select value={direction} onChange={(e) => setDirection(e.target.value)}>
-              <option value="higher_is_better">Higher is better</option>
-              <option value="lower_is_better">Lower is better</option>
-              <option value="target_is_best">Target is best</option>
+              <option value="higher_is_better">ከፍ ያለ ይሻላል</option>
+              <option value="lower_is_better">ዝቅ ያለ ይሻላል</option>
+              <option value="target_is_best">የታለመው ይሻላል</option>
             </select>
           </div>
         </div>
         <div className="grid grid-3">
-          <div className="field"><label>Target</label><input type="number" min="0" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="100" /></div>
-          <div className="field"><label>Actual</label><input type="number" min="0" value={actual} onChange={(e) => setActual(e.target.value)} placeholder="85" /></div>
-          <div className="field"><label>Unit</label><input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="points" /></div>
+          <div className="field"><label>ዒላማ</label><input type="number" min="0" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="100" /></div>
+          <div className="field"><label>ትክክለኛ</label><input type="number" min="0" value={actual} onChange={(e) => setActual(e.target.value)} placeholder="85" /></div>
+          <div className="field"><label>መለኪያ</label><input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="ነጥቦች" /></div>
         </div>
-        <div className="field"><label>Weight</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
+        <div className="field"><label>ክብደት</label><input type="number" min="0" step="0.5" value={weight} onChange={(e) => setWeight(e.target.value)} /></div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={saving || !name}>{saving ? "Saving…" : isNew ? "Add" : "Update"}</button>
-          <button className="btn btn-sm" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" type="submit" disabled={saving || !name}>{saving ? "በማስቀመጥ ላይ…" : isNew ? "ጨምር" : "አሻሽል"}</button>
+          <button className="btn btn-sm" type="button" onClick={onClose}>ዝጋ</button>
         </div>
       </form>
     </Modal>
@@ -638,42 +764,42 @@ function ProgressForm({ activity, onClose, onSaved, toast }) {
     e.preventDefault(); setSaving(true);
     try {
       await api.post(`/programs/activities/${activity.id}/progress`, { progress_pct: Number(pct), notes: notes || null });
-      toast.push("Progress logged", "success"); onSaved();
+      toast.push("አፈጻጸሙ ተመዝግቧል", "success"); onSaved();
     } catch (err) { toast.push(err.message, "error"); } finally { setSaving(false); }
   }
 
   if (hasKpis) {
     return (
-      <Modal title={`Progress — ${activity.title}`} onClose={onClose}>
+      <Modal title={`አፈጻጸም — ${activity.title}`} onClose={onClose}>
         <div style={{ padding: "8px 0", fontSize: 13 }}>
           <div style={{ marginBottom: 8, color: "var(--text-dim)" }}>
-            Progress is automatically calculated from KPI actual values.
+            አፈጻጸም ከKPI ትክክለኛ ዋጋዎች በራስ-ሰር ይሰላል።
           </div>
           <div style={{ fontWeight: 500, fontSize: 24, textAlign: "center", padding: "16px 0" }}>
             {activity.progress_pct ?? 0}%
           </div>
           <div style={{ textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-            Update KPI actual values to change progress
+            አፈጻጸሙን ለመቀየር የKPI ትክክለኛ ዋጋዎችን ያሻሽሉ
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" }}>
-          <button className="btn btn-sm" type="button" onClick={onClose}>Close</button>
+          <button className="btn btn-sm" type="button" onClick={onClose}>ዝጋ</button>
         </div>
       </Modal>
     );
   }
 
   return (
-    <Modal title={`Log Progress — ${activity.title}`} onClose={onClose}>
+    <Modal title={`አፈጻጸም መዝግብ — ${activity.title}`} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="field">
-          <label>Progress: {pct}%</label>
+          <label>አፈጻጸም፦ {pct}%</label>
           <input type="range" min="0" max="100" step="5" value={pct} onChange={(e) => setPct(e.target.value)} style={{ width: "100%" }} />
         </div>
-        <div className="field"><label>Notes</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="What was accomplished…" /></div>
+        <div className="field"><label>ማስታወሻ</label><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="ምን ተከናወነ? …" /></div>
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : "Log"}</button>
-          <button className="btn btn-sm" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "በማስቀመጥ ላይ…" : "መዝግብ"}</button>
+          <button className="btn btn-sm" type="button" onClick={onClose}>ዝጋ</button>
         </div>
       </form>
     </Modal>

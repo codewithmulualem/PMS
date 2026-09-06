@@ -32,7 +32,7 @@ export default function DistributionBar({ buckets, total }) {
   }, []);
 
   const t = total ?? buckets.reduce((s, b) => s + b.count, 0);
-  if (!t || !buckets.length) return <div className="empty-state">No scores calculated yet for this cycle.</div>;
+  if (!t || !buckets.length) return <div className="empty-state">ለዚህ ዑደት እስካሁን ነጥብ አልተሰላም።</div>;
 
   return (
     <div>
@@ -58,7 +58,7 @@ export default function DistributionBar({ buckets, total }) {
             <strong style={{ fontFamily: "var(--font-mono)" }}>{b.count}</strong>
           </span>
         ))}
-        {t > 0 && <span className="lg" style={{ marginLeft: "auto", color: "var(--text-faint)" }}>{t} total</span>}
+        {t > 0 && <span className="lg" style={{ marginLeft: "auto", color: "var(--text-faint)" }}>{t} ጠቅላላ</span>}
       </div>
     </div>
   );

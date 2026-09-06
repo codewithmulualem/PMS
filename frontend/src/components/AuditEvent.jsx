@@ -1,13 +1,13 @@
 import { Icons } from "./icons";
 
 const ACTION_META = {
-  create: { label: "created", color: "var(--green)", icon: Icons.plus },
-  update: { label: "updated", color: "var(--indigo)", icon: Icons.edit },
-  delete: { label: "deleted", color: "var(--crimson)", icon: Icons.close },
-  recalculate: { label: "score recalculated", color: "var(--amber)", icon: Icons.spark },
-  calculated: { label: "score calculated", color: "var(--amber)", icon: Icons.spark },
-  login: { label: "signed in", color: "var(--indigo)", icon: Icons.user },
-  logout: { label: "signed out", color: "var(--text-faint)", icon: Icons.user },
+  create: { label: "ተፈጥሯል", color: "var(--green)", icon: Icons.plus },
+  update: { label: "ተሻሽሏል", color: "var(--indigo)", icon: Icons.edit },
+  delete: { label: "ተሰርዟል", color: "var(--crimson)", icon: Icons.close },
+  recalculate: { label: "ነጥብ እንደገና ተሰልቷል", color: "var(--amber)", icon: Icons.spark },
+  calculated: { label: "ነጥብ ተሰልቷል", color: "var(--amber)", icon: Icons.spark },
+  login: { label: "ገብቷል", color: "var(--indigo)", icon: Icons.user },
+  logout: { label: "ወጥቷል", color: "var(--text-faint)", icon: Icons.user },
 };
 
 function fmtTime(ts) {
@@ -16,11 +16,11 @@ function fmtTime(ts) {
   if (Number.isNaN(date.getTime())) return ts;
   const now = new Date();
   const diff = (now - date) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`;
-  return date.toLocaleDateString();
+  if (diff < 60) return "አሁን";
+  if (diff < 3600) return `${Math.floor(diff / 60)} ደቂቃ በፊት`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} ሰዓት በፊት`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} ቀን በፊት`;
+  return date.toLocaleDateString("am-ET");
 }
 
 function shortValue(v) {
@@ -57,7 +57,7 @@ export default function AuditEvent({ event }) {
             <span className="text-dim">#{event.entity_id ?? "—"}</span>{" "}
             <span style={{ color: meta.color }}>{meta.label}</span>
             {event.changed_by && (
-              <span className="text-faint"> · by <b className="text-dim">{event.changed_by}</b></span>
+              <span className="text-faint"> · በ <b className="text-dim">{event.changed_by}</b></span>
             )}
           </div>
           <span className="mono text-faint" style={{ fontSize: 11, whiteSpace: "nowrap", marginLeft: 10 }}>

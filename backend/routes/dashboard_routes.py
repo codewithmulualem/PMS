@@ -118,8 +118,9 @@ def employee_dashboard(employee_id):
 @bp.get("/managers/<int:manager_id>/team-dashboard")
 @login_required
 def manager_dashboard(manager_id):
-    if g.user["role"] not in ("admin", "manager", "executive") or (
-        g.user["role"] in ("manager", "executive") and g.user["employee_id"] != manager_id
+    MANAGE_ROLES = ("admin", "director", "dept_head", "team_leader", "manager", "executive")
+    if g.user["role"] not in MANAGE_ROLES or (
+        g.user["role"] in ("director", "dept_head", "team_leader", "manager", "executive") and g.user["employee_id"] != manager_id
     ):
         return jsonify({"error": "Forbidden"}), 403
     db = get_db()

@@ -6,12 +6,13 @@ import Topbar from "../components/Topbar";
 import Modal from "../components/Modal";
 import Skeleton from "../components/Skeleton";
 import { Icons } from "../components/icons";
+import { perspectiveLabel, statusLabel } from "../i18n";
 
 const STATUS_CHIP = {
   draft: "chip-neutral", submitted: "chip-indigo", in_review: "chip-warn",
   rejected: "chip-danger", scored: "chip-success",
 };
-const PERSPECTIVE_LABEL = { self: "self", manager: "manager", peer: "peer" };
+const PERSPECTIVE_LABEL = { self: "የራስ", manager: "የአስተዳዳሪ", peer: "የሥራ ባልደረባ" };
 
 export default function EvaluationForms() {
   const toast = useToast();
@@ -32,13 +33,13 @@ export default function EvaluationForms() {
 
   return (
     <div>
-      <Topbar subtitle="Design reusable evaluation formats, assign them per cycle, and track every response" />
+      <Topbar subtitle="የሚደገሙ የግምገማ ቅጾችን ያዘጋጁ፣ በዑደት ይመድቡ እና ሁሉንም ምላሾች ይከታተሉ" />
 
       {error && <div className="error-banner">{error}</div>}
 
       <div className="segmented" style={{ marginBottom: 18 }}>
-        <button className={tab === "forms" ? "active" : ""} onClick={() => setTab("forms")}>Forms</button>
-        <button className={tab === "assignments" ? "active" : ""} onClick={() => setTab("assignments")}>Assignments</button>
+        <button className={tab === "forms" ? "active" : ""} onClick={() => setTab("forms")}>ቅጾች</button>
+        <button className={tab === "assignments" ? "active" : ""} onClick={() => setTab("assignments")}>ምደባዎች</button>
       </div>
 
       {tab === "forms" ? (
@@ -59,10 +60,10 @@ function FormsList({ forms, onEdit, onChanged, toast }) {
   const [showAssign, setShowAssign] = useState(null);
 
   async function remove(f) {
-    if (!confirm(`Delete form "${f.name}" permanently? This removes its assignments, answers, and approval history. This cannot be undone.`)) return;
+    if (!confirm(`የ"${f.name}" ቅጽ በቋሚነት ይሰረዝ? ምደባዎቹ፣ መልሶቹና የማጽደቅ ታሪኩ ይወገዳሉ። ይህ መመለስ የማይችል ነው።`)) return;
     try {
       await api.delete(`/evaluation-forms/${f.id}`);
-      toast.push(`Form "${f.name}" deleted`, "success");
+      toast.push(`“${f.name}” ቅጽ ተሰርዟል`, "success");
       onChanged();
     } catch (e) { toast.push(e.message, "error"); }
   }
@@ -72,16 +73,16 @@ function FormsList({ forms, onEdit, onChanged, toast }) {
   return (
     <div className="card">
       <div className="card-title">
-        Form Templates
-        <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><Icons.plus size={13} /> New form</button>
+        የቅጽ አብነቶች
+        <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}><Icons.plus size={13} /> አዲስ ቅጽ</button>
       </div>
       {forms.length === 0 ? (
-        <div className="empty-state">No evaluation forms yet. Create your first format template.</div>
+        <div className="empty-state">እስካሁን የግምገማ ቅጽ የለም። የመጀመሪያውን የቅጽ አብነት ይፍጠሩ።</div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Form</th><th className="num">Sections</th><th className="num">Questions</th><th className="num">Max depth</th><th>Status</th><th className="num" /></tr>
+              <tr><th>ቅጽ</th><th className="num">ክፍሎች</th><th className="num">ጥያቄዎች</th><th className="num">ከፍተኛ ደረጃ</th><th>ሁኔታ</th><th className="num" /></tr>
             </thead>
             <tbody>
               {forms.map((f) => (
@@ -93,12 +94,12 @@ function FormsList({ forms, onEdit, onChanged, toast }) {
                   <td className="num">{f.section_count}</td>
                   <td className="num">{f.question_count}</td>
                   <td className="num">{f.approval_levels}</td>
-                  <td>{f.active ? <span className="chip chip-success">active</span> : <span className="chip chip-neutral">archived</span>}</td>
+                  <td>{f.active ? <span className="chip chip-success">ንቁ</span> : <span className="chip chip-neutral">ተመዝግቧል</span>}</td>
                     <td className="num">
                       <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setShowAssign(f.id)}><Icons.send size={13} /> Assign</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => onEdit(f.id)}><Icons.edit size={13} /> Edit</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => remove(f)}><Icons.trash size={13} /> Delete</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setShowAssign(f.id)}><Icons.send size={13} /> መድብ</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => onEdit(f.id)}><Icons.edit size={13} /> አርትዕ</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => remove(f)}><Icons.trash size={13} /> ሰርዝ</button>
                       </div>
                     </td>
                 </tr>
@@ -127,7 +128,7 @@ function NewFormModal({ onClose, onCreated, toast }) {
     setSaving(true);
     try {
       await api.post("/evaluation-forms", form);
-      toast.push(`Form "${form.name}" created`, "success");
+      toast.push(`“${form.name}” ቅጽ ተፈጥሯል`, "success");
       onCreated();
     } catch (err) {
       toast.push(err.message, "error");
@@ -136,28 +137,28 @@ function NewFormModal({ onClose, onCreated, toast }) {
   }
 
   return (
-    <Modal title="New evaluation form" subtitle="A reusable format — sections become evaluation perspectives" onClose={onClose}>
+    <Modal title="አዲስ የግምገማ ቅጽ" subtitle="የሚደገም ቅጽ — ክፍሎቹ የግምገማ አቅጣጫዎች ይሆናሉ" onClose={onClose}>
       <form onSubmit={submit}>
         <div className="field">
-          <label>Form name</label>
-          <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. H2 2026 Performance Review" />
+          <label>የቅጽ ስም</label>
+          <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="ለምሳሌ፦ የ2018 ዓ.ም. የአፈጻጸም ግምገማ" />
         </div>
         <div className="field">
-          <label>Description</label>
-          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Purpose and scope of this evaluation…" />
+          <label>መግለጫ</label>
+          <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="የዚህ ግምገማ ዓላማ እና ወሰን…" />
         </div>
         <div className="field">
-          <label>Max approval depth</label>
+          <label>ከፍተኛ የማጽደቅ ደረጃ</label>
           <select value={form.approval_levels} onChange={(e) => setForm({ ...form, approval_levels: Number(e.target.value) })}>
-            <option value={1}>1 — immediate manager only</option>
-            <option value={2}>2 — manager, then their manager</option>
-            <option value={3}>3 — three levels of the chain</option>
+            <option value={1}>1 — ቀጥተኛ አስተዳዳሪ ብቻ</option>
+            <option value={2}>2 — አስተዳዳሪ፣ ከዚያ የእሱ አስተዳዳሪ</option>
+            <option value={3}>3 — ሦስት የትዕዛዝ ሰንሰለት ደረጃዎች</option>
           </select>
-          <span className="hint">A cap on how many levels the review climbs. The actual depth is the lower of this cap and the employee's reporting chain — root reports are scored on submission, and a top executive's final sign-off requires every top manager.</span>
+          <span className="hint">ግምገማው የሚያልፍባቸውን ደረጃዎች ይወስናል። ትክክለኛው ደረጃ ከዚህ ገደብ እና ከሰራተኛው የሪፖርት ሰንሰለት ትንሹ ነው።</span>
         </div>
         <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "Creating…" : "Create form"}</button>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>ሰርዝ</button>
+          <button className="btn btn-primary" type="submit" disabled={saving}>{saving ? "በመፍጠር ላይ…" : "ቅጽ ፍጠር"}</button>
         </div>
       </form>
     </Modal>
@@ -192,7 +193,7 @@ function AssignModal({ formId, onClose, onDone, toast }) {
       .catch((err) => toast.push(err.message, "error"));
   }, [formId, toast]);
 
-  if (!form) return <Modal title="Loading…" onClose={onClose}><div className="empty-state">Loading…</div></Modal>;
+  if (!form) return <Modal title="በመጫን ላይ…" onClose={onClose}><div className="empty-state">በመጫን ላይ…</div></Modal>;
 
   const perspectives = new Set(form.sections.map((s) => s.perspective));
   const needsManager = perspectives.has("manager");
@@ -237,7 +238,12 @@ function AssignModal({ formId, onClose, onDone, toast }) {
         })),
       };
       const res = await api.post(`/evaluation-forms/${formId}/assign`, payload);
-      toast.push(`Created ${res.created?.length || 0} assignment(s)`, "success");
+      const createdN = res.created?.length || 0;
+      const blockedN = res.blocked?.length || 0;
+      let msg = `${createdN} ምደባ(ዎች) ተፈጥረዋል`;
+      if (res.skipped) msg += ` · ${res.skipped} ተዘልለዋል`;
+      if (blockedN) msg += ` · ${blockedN} የአመራር ሚና(ዎች) ተገልለዋል (በእጅ ግምገማ የለም)`;
+      toast.push(msg, blockedN ? "info" : "success");
       onDone();
     } catch (err) {
       toast.push(err.message, "error");
@@ -247,34 +253,34 @@ function AssignModal({ formId, onClose, onDone, toast }) {
 
   return (
     <Modal
-      title={`Assign "${form.name}"`}
-      subtitle="Deliver this format to employees for the selected cycle — 360 reviewers are created alongside their self review"
+      title={`“${form.name}” መድብ`}
+      subtitle="ይህን ቅጽ ለተመረጡ ሰራተኞች በተመረጠው ዑደት ይስጡ — የ360 ገምጋሚዎች ከራስ ግምገማቸው ጋር አብረው ይፈጠራሉ"
       onClose={onClose}
       wide
       footer={
         <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-secondary" onClick={onClose}>ሰርዝ</button>
           <button className="btn btn-primary" onClick={assign} disabled={saving || !cycle || !selectedIds.length}>
-            <Icons.send size={14} /> {saving ? "Assigning…" : `Assign to ${selectedIds.length} employee${selectedIds.length > 1 ? "s" : ""}`}
+            <Icons.send size={14} /> {saving ? "በመመደብ ላይ…" : `ለ${selectedIds.length} ሰራተኛ መድብ`}
           </button>
         </div>
       }
     >
       <div className="form-grid" style={{ marginBottom: 8 }}>
         <div className="field">
-          <label>Cycle</label>
+          <label>ዑደት</label>
           <select value={cycle || ""} onChange={(e) => setCycle(Number(e.target.value))}>
-            {cycles.map((c) => <option key={c.id} value={c.id}>{c.name} {c.status === "active" ? "• active" : ""}</option>)}
+            {cycles.map((c) => <option key={c.id} value={c.id}>{c.name} {c.status === "active" ? "• ንቁ" : ""}</option>)}
           </select>
         </div>
         <div className="field">
-          <label>Due date</label>
+          <label>የመጨረሻ ቀን</label>
           <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </div>
       </div>
 
       <div className="flex-between" style={{ margin: "6px 0 4px" }}>
-        <span className="text-dim" style={{ fontSize: 12.5, fontWeight: 600 }}>Employees</span>
+        <span className="text-dim" style={{ fontSize: 12.5, fontWeight: 600 }}>ሰራተኞች</span>
         <button className="btn-ghost btn btn-sm" onClick={() => {
           const all = Object.fromEntries(employees.map((e) => [e.id, true]));
           setSelected(all);
@@ -282,7 +288,7 @@ function AssignModal({ formId, onClose, onDone, toast }) {
             const mg = Object.fromEntries(employees.map((e) => [e.id, !!e.manager_id]));
             setMgrOn(mg);
           }
-        }}>Select all</button>
+        }}>ሁሉንም ምረጥ</button>
       </div>
       <div className="assign-grid">
         {employees.map((e) => (
@@ -298,9 +304,9 @@ function AssignModal({ formId, onClose, onDone, toast }) {
 
       {(needsManager || needsPeer) && selectedIds.length > 0 && (
         <div className="reviewer-block">
-          <div className="card-title" style={{ margin: "14px 0 4px" }}>360 Reviewers</div>
+          <div className="card-title" style={{ margin: "14px 0 4px" }}>የ360 ገምጋሚዎች</div>
           <div className="text-faint" style={{ fontSize: 12, marginBottom: 8 }}>
-            The form includes {[needsManager && "manager", needsPeer && "peer"].filter(Boolean).join(" + ")} perspective(s). Assign them per employee below.
+            ቅጹ {[needsManager && "የአስተዳዳሪ", needsPeer && "የሥራ ባልደረባ"].filter(Boolean).join(" + ")} አቅጣጫ(ዎች)ን ይዟል። ከዚህ በታች ለእያንዳንዱ ሰራተኛ ይመድቡ።
           </div>
           {selectedIds.map((id) => {
             const emp = empById[id];
@@ -317,14 +323,14 @@ function AssignModal({ formId, onClose, onDone, toast }) {
                     <label className={`reviewer-toggle ${mgrOn[id] ? "on" : ""}`}>
                       <input type="checkbox" checked={!!mgrOn[id]} disabled={!emp.manager_id} onChange={() => setMgrOn((m) => ({ ...m, [id]: !m[id] }))} />
                       <span>
-                        <b>Manager review</b>
-                        <div className="cell-sub">{emp.manager_id ? `by ${mgr?.full_name || "their manager"}` : "no manager in the org"}</div>
+                        <b>የአስተዳዳሪ ግምገማ</b>
+                        <div className="cell-sub">{emp.manager_id ? `በ ${mgr?.full_name || "አስተዳዳሪው"}` : "በድርጅቱ ውስጥ አስተዳዳሪ የለም"}</div>
                       </span>
                     </label>
                   )}
                   {needsPeer && (
                     <div className="reviewer-peers">
-                      <span className="text-dim" style={{ fontSize: 12, fontWeight: 600 }}>Peer reviewers</span>
+                      <span className="text-dim" style={{ fontSize: 12, fontWeight: 600 }}>የሥራ ባልደረባ ገምጋሚዎች</span>
                       <div className="peer-chips">
                         {employees.filter((p) => p.id !== id).map((p) => {
                           const on = (peersOn[id] || []).includes(p.id);
@@ -365,7 +371,7 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
   async function addSection(perspective = "self") {
     try {
       await api.post(`/evaluation-forms/${formId}/sections`, { title: "New perspective", weight: 1, perspective });
-      toast.push("Section added", "success");
+      toast.push("ክፍሉ ተጨምሯል", "success");
       setForm(await api.get(`/evaluation-forms/${formId}`));
       onChanged();
     } catch (e) { toast.push(e.message, "error"); }
@@ -374,7 +380,7 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
   async function addQuestion(sectionId, kind) {
     try {
       await api.post(`/evaluation-form-sections/${sectionId}/questions`, {
-        text: "New question", kind,
+        text: "አዲስ ጥያቄ", kind,
         max_score: kind === "rating" ? 5 : kind === "scale" ? 100 : null,
       });
       setForm(await api.get(`/evaluation-forms/${formId}`));
@@ -389,33 +395,33 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
   return (
     <div className="card">
       <div className="flex-between" style={{ marginBottom: 16 }}>
-        <button className="back-btn" onClick={onBack}><Icons.chevronLeft size={15} /> All forms</button>
+        <button className="back-btn" onClick={onBack}><Icons.chevronLeft size={15} /> ሁሉም ቅጾች</button>
         <div className="flex gap-8">
           <button className="btn btn-secondary btn-sm" onClick={() => updateMeta({ active: form.active ? 0 : 1 })}>
-            {form.active ? "Archive" : "Reactivate"}
+            {form.active ? "ወደ መዝገብ አስገባ" : "እንደገና አንቃ"}
           </button>
         </div>
       </div>
 
       <div className="form-grid" style={{ marginBottom: 8 }}>
         <div className="field">
-          <label>Form name</label>
+          <label>የቅጽ ስም</label>
           <input value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             onBlur={() => updateMeta({ name: form.name })} />
         </div>
         <div className="field">
-          <label>Max approval depth</label>
+          <label>ከፍተኛ የማጽደቅ ደረጃ</label>
           <select value={form.approval_levels} onChange={(e) => updateMeta({ approval_levels: Number(e.target.value) })}>
-            <option value={1}>1 — immediate manager</option>
-            <option value={2}>2 — manager + their manager</option>
-            <option value={3}>3 — three levels</option>
+            <option value={1}>1 — ቀጥተኛ አስተዳዳሪ</option>
+            <option value={2}>2 — አስተዳዳሪ + የእሱ አስተዳዳሪ</option>
+            <option value={3}>3 — ሦስት ደረጃዎች</option>
           </select>
-          <span className="hint">The effective depth per employee is the lower of this cap and their reporting chain length.</span>
+          <span className="hint">ለእያንዳንዱ ሰራተኛ የሚሠራው ደረጃ ከዚህ ገደብ እና ከሪፖርት ሰንሰለቱ ትንሹ ነው።</span>
         </div>
       </div>
       <div className="field">
-        <label>Description</label>
+        <label>መግለጫ</label>
         <input value={form.description || ""}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
           onBlur={() => updateMeta({ description: form.description })} />
@@ -425,7 +431,7 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
 
       <div className="form-grid" style={{ marginBottom: 14 }}>
         <div className="field">
-          <label>Perspective weights</label>
+          <label>የግምገማ አቅጣጫ ክብደቶች</label>
           <div className="flex gap-8">
             {["self", "manager", "peer"].map((p) => (
               <label key={p} className="weight-chip">
@@ -439,7 +445,7 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
               </label>
             ))}
           </div>
-          <span className="hint">The subject's 360 score combines perspective scores weighted by these values, renormalized over the perspectives that were actually completed.</span>
+          <span className="hint">የተገምጋሚው የ360 ነጥብ የተሟሉትን የግምገማ አቅጣጫዎች በእነዚህ ክብደቶች በማጣመር ይሰላል።</span>
         </div>
       </div>
 
@@ -462,10 +468,10 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
                   .then(() => { setForm({ ...form, sections: form.sections.map((x) => x.id === s.id ? { ...x, perspective: e.target.value } : x) }); })
                   .catch((e) => toast.push(e.message, "error"))}
               >
-                {["self", "manager", "peer"].map((p) => <option key={p} value={p}>{p}</option>)}
+                {["self", "manager", "peer"].map((p) => <option key={p} value={p}>{PERSPECTIVE_LABEL[p]}</option>)}
               </select>
               <div className="builder-weight">
-                <span className="text-faint" style={{ fontSize: 11 }}>weight</span>
+                <span className="text-faint" style={{ fontSize: 11 }}>ክብደት</span>
                 <input
                   type="number" step="0.05" min="0" max="1" className="mono"
                   value={s.weight}
@@ -473,27 +479,27 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
                   onBlur={() => api.put(`/evaluation-form-sections/${s.id}`, { weight: s.weight }).catch((e) => toast.push(e.message, "error"))}
                 />
               </div>
-              <button className="btn-icon btn btn-ghost" title="Move up" disabled={si === 0}
+              <button className="btn-icon btn btn-ghost" title="ወደ ላይ አንቀሳቅስ" disabled={si === 0}
                 onClick={() => api.post(`/evaluation-form-sections/${s.id}/move`, { direction: "up" }).then(refresh).catch((e) => toast.push(e.message, "error"))}>
                 <Icons.chevronUp size={15} />
               </button>
-              <button className="btn-icon btn btn-ghost" title="Move down" disabled={si === form.sections.length - 1}
+              <button className="btn-icon btn btn-ghost" title="ወደ ታች አንቀሳቅስ" disabled={si === form.sections.length - 1}
                 onClick={() => api.post(`/evaluation-form-sections/${s.id}/move`, { direction: "down" }).then(refresh).catch((e) => toast.push(e.message, "error"))}>
                 <Icons.chevronDown size={15} />
               </button>
-              <button className="btn-icon btn btn-ghost" title="Duplicate section"
+              <button className="btn-icon btn btn-ghost" title="ክፍል ድገም"
                 onClick={() => api.post(`/evaluation-form-sections/${s.id}/duplicate`).then(() => { refresh(); onChanged(); }).catch((e) => toast.push(e.message, "error"))}>
                 <Icons.copy size={15} />
               </button>
-              <button className="btn-icon btn btn-ghost" title="Delete section"
-                onClick={async () => { if (confirm(`Delete section "${s.title}"?`)) { await api.delete(`/evaluation-form-sections/${s.id}`); await refresh(); onChanged(); } }}>
+              <button className="btn-icon btn btn-ghost" title="ክፍል ሰርዝ"
+                onClick={async () => { if (confirm(`የ"${s.title}" ክፍል ይሰረዝ?`)) { await api.delete(`/evaluation-form-sections/${s.id}`); await refresh(); onChanged(); } }}>
                 <Icons.trash size={15} />
               </button>
             </div>
           </div>
           <input
             className="builder-desc-input"
-            placeholder="Section description (optional)"
+            placeholder="የክፍሉ መግለጫ (አማራጭ)"
             value={s.description || ""}
             onChange={(e) => setForm({ ...form, sections: form.sections.map((x) => x.id === s.id ? { ...x, description: e.target.value } : x) })}
             onBlur={() => api.put(`/evaluation-form-sections/${s.id}`, { description: s.description }).catch((e) => toast.push(e.message, "error"))}
@@ -503,25 +509,24 @@ function FormBuilder({ formId, onBack, onChanged, toast }) {
               <BuilderQuestion key={q.id} q={q} qi={qi} count={s.questions.length} sectionId={s.id} formId={formId} setForm={setForm} refresh={refresh} toast={toast} onChanged={onChanged} />
             ))}
             <div className="flex gap-8" style={{ marginTop: 6 }}>
-              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "rating")}><Icons.plus size={13} /> Rating (1–5)</button>
-              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "scale")}><Icons.plus size={13} /> Scale</button>
-              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "select")}><Icons.plus size={13} /> Choice</button>
-              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "multi")}><Icons.plus size={13} /> Multi-select</button>
-              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "text")}><Icons.plus size={13} /> Text</button>
+              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "rating")}><Icons.plus size={13} /> ደረጃ (1–5)</button>
+              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "scale")}><Icons.plus size={13} /> ሚዛን</button>
+              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "select")}><Icons.plus size={13} /> ምርጫ</button>
+              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "multi")}><Icons.plus size={13} /> ብዙ ምርጫ</button>
+              <button className="btn-ghost btn btn-sm" onClick={() => addQuestion(s.id, "text")}><Icons.plus size={13} /> ጽሑፍ</button>
             </div>
           </div>
         </div>
       ))}
 
       <div className="flex gap-8" style={{ marginTop: 10 }}>
-        <button className="btn btn-secondary" onClick={() => addSection("self")}><Icons.plus size={14} /> Add self section</button>
-        <button className="btn btn-secondary" onClick={() => addSection("manager")}><Icons.plus size={14} /> Add manager section</button>
-        <button className="btn btn-secondary" onClick={() => addSection("peer")}><Icons.plus size={14} /> Add peer section</button>
+        <button className="btn btn-secondary" onClick={() => addSection("self")}><Icons.plus size={14} /> የራስ ክፍል ጨምር</button>
+        <button className="btn btn-secondary" onClick={() => addSection("manager")}><Icons.plus size={14} /> የአስተዳዳሪ ክፍል ጨምር</button>
+        <button className="btn btn-secondary" onClick={() => addSection("peer")}><Icons.plus size={14} /> የሥራ ባልደረባ ክፍል ጨምር</button>
       </div>
 
       <div className="text-faint" style={{ fontSize: 12, marginTop: 14, lineHeight: 1.6 }}>
-        Sections are grouped by evaluator perspective: <b>self</b>, <b>manager</b>, or <b>peer</b>. Each perspective is filled by a
-        different reviewer, weighted by the perspective weights above, and the score renormalizes over what was actually answered.
+        ክፍሎች በገምጋሚ አቅጣጫ ይመደባሉ፦ <b>የራስ</b>፣ <b>የአስተዳዳሪ</b> ወይም <b>የሥራ ባልደረባ</b>። እያንዳንዱ አቅጣጫ በተለየ ገምጋሚ ይሞላል።
       </div>
     </div>
   );
@@ -562,37 +567,37 @@ function BuilderQuestion({ q, qi, count, sectionId, formId, setForm, refresh, to
           onChange={(e) => setLocal({ text: e.target.value })}
           onBlur={() => patch({ text: q.text })} />
         <select className="builder-select" value={q.kind} onChange={(e) => changeKind(e.target.value)}>
-          {["rating", "scale", "select", "multi", "text"].map((k) => <option key={k} value={k}>{k}</option>)}
+          {["rating", "scale", "select", "multi", "text"].map((k) => <option key={k} value={k}>{{ rating: "ደረጃ", scale: "ሚዛን", select: "ምርጫ", multi: "ብዙ ምርጫ", text: "ጽሑፍ" }[k]}</option>)}
         </select>
         {(q.kind === "rating" || q.kind === "scale") && (
           <input
             className="builder-max mono"
-            title="Max score"
+            title="ከፍተኛ ነጥብ"
             type="number" min="1" max="1000"
             value={q.max_score || 5}
             onChange={(e) => setLocal({ max_score: Number(e.target.value) || 5 })}
             onBlur={() => patch({ max_score: Number(q.max_score) || 5 })}
           />
         )}
-        <label className="required-toggle" title="Required question">
+        <label className="required-toggle" title="አስፈላጊ ጥያቄ">
           <input type="checkbox" checked={!!q.required} onChange={(e) => patch({ required: e.target.checked ? 1 : 0 })} />
-          <span>req</span>
+          <span>አስፈላጊ</span>
         </label>
-        <button className="btn-icon btn btn-ghost" title="Move up" disabled={qi === 0}
+        <button className="btn-icon btn btn-ghost" title="ወደ ላይ አንቀሳቅስ" disabled={qi === 0}
           onClick={() => api.post(`/evaluation-form-questions/${q.id}/move`, { direction: "up" }).then(refresh).catch((e) => toast.push(e.message, "error"))}>
           <Icons.chevronUp size={14} />
         </button>
-        <button className="btn-icon btn btn-ghost" title="Move down" disabled={qi === count - 1}
+        <button className="btn-icon btn btn-ghost" title="ወደ ታች አንቀሳቅስ" disabled={qi === count - 1}
           onClick={() => api.post(`/evaluation-form-questions/${q.id}/move`, { direction: "down" }).then(refresh).catch((e) => toast.push(e.message, "error"))}>
           <Icons.chevronDown size={14} />
         </button>
-        <button className="btn-icon btn btn-ghost" title="Duplicate question"
+        <button className="btn-icon btn btn-ghost" title="ጥያቄ ድገም"
           onClick={() => api.post(`/evaluation-form-questions/${q.id}/duplicate`).then(() => { refresh(); onChanged(); }).catch((e) => toast.push(e.message, "error"))}>
           <Icons.copy size={14} />
         </button>
-        <button className="btn-icon btn btn-ghost" title="Delete question"
+        <button className="btn-icon btn btn-ghost" title="ጥያቄ ሰርዝ"
           onClick={async () => {
-            if (confirm("Delete this question?")) {
+            if (confirm("ይህ ጥያቄ ይሰረዝ?")) {
               await api.delete(`/evaluation-form-questions/${q.id}`);
               await refresh();
               onChanged();
@@ -603,7 +608,7 @@ function BuilderQuestion({ q, qi, count, sectionId, formId, setForm, refresh, to
       </div>
       <input
         className="builder-desc-input"
-        placeholder="Question hint / description (optional)"
+        placeholder="የጥያቄው ፍንጭ / መግለጫ (አማራጭ)"
         value={q.description || ""}
         onChange={(e) => setLocal({ description: e.target.value })}
         onBlur={() => patch({ description: q.description })}
@@ -611,7 +616,7 @@ function BuilderQuestion({ q, qi, count, sectionId, formId, setForm, refresh, to
       {(q.kind === "select" || q.kind === "multi") && (
         <input
           className="builder-desc-input"
-          placeholder="Options, comma-separated (e.g. Promote soon, Stretch role, Stay on track)"
+          placeholder="ምርጫዎችን በኮማ ይለያዩ (ለምሳሌ፦ በቅርቡ ያሳድጉ፣ ሚና ያስፋፉ፣ በመንገድ ላይ)"
           value={optionsText}
           onChange={(e) => setOptionsText(e.target.value)}
           onBlur={() => {
@@ -641,33 +646,33 @@ function AssignmentsTable({ toast }) {
   }
 
   async function remove(a) {
-    if (!confirm(`Delete ${a.subject_name}'s "${a.form_name}" ${a.evaluator_type} assignment? This also removes its answers and approval records.`)) return;
+    if (!confirm(`የ${a.subject_name} "${a.form_name}" የ${PERSPECTIVE_LABEL[a.evaluator_type] || a.evaluator_type} ምደባ ይሰረዝ? መልሶቹና የማጽደቅ መዝገቦቹም ይወገዳሉ።`)) return;
     try {
       await api.delete(`/evaluation-assignments/${a.id}`);
-      toast.push("Assignment deleted", "success");
+      toast.push("ምደባው ተሰርዟል", "success");
       reload();
     } catch (e) { toast.push(e.message, "error"); }
   }
 
   return (
     <div className="card">
-      <div className="card-title">All Assignments</div>
+      <div className="card-title">ሁሉም ምደባዎች</div>
       <div className="chip-row" style={{ marginBottom: 12 }}>
         {["all", "draft", "submitted", "in_review", "rejected", "scored"].map((s) => (
           <button key={s} className={`chip chip-btn ${status === s ? "active" : ""}`} onClick={() => setStatus(s)}>
-            {s === "all" ? "All" : s}
+            {s === "all" ? "ሁሉም" : statusLabel(s)}
           </button>
         ))}
       </div>
       {rows === null ? (
         <Skeleton lines={4} height={20} />
       ) : rows.length === 0 ? (
-        <div className="empty-state">No assignments match this filter.</div>
+        <div className="empty-state">ከዚህ ማጣሪያ ጋር የሚዛመድ ምደባ የለም።</div>
       ) : (
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Subject</th><th>Evaluator</th><th>Form</th><th>Cycle</th><th className="num">Due</th><th>Status</th><th className="num">Score</th>{isAdmin && <th className="num" />}</tr>
+              <tr><th>ተገምጋሚ</th><th>ገምጋሚ</th><th>ቅጽ</th><th>ዑደት</th><th className="num">የመጨረሻ ቀን</th><th>ሁኔታ</th><th className="num">ነጥብ</th>{isAdmin && <th className="num" />}</tr>
             </thead>
             <tbody>
               {rows.map((a) => (
@@ -687,7 +692,7 @@ function AssignmentsTable({ toast }) {
                   <td className="num">
                     {a.due_date ? <span className={`mono ${isOverdue(a) ? "overdue" : ""}`}>{a.due_date}</span> : "—"}
                   </td>
-                  <td><span className={`chip ${STATUS_CHIP[a.status]}`}>{a.status}</span></td>
+                  <td><span className={`chip ${STATUS_CHIP[a.status]}`}>{statusLabel(a.status)}</span></td>
                   <td className="num cell-strong">
                     {a.overall_score != null ? <span className="mono">{a.overall_score.toFixed(1)}</span>
                       : a.score != null ? <span className="mono">{a.score.toFixed(1)}</span> : "—"}
@@ -695,8 +700,8 @@ function AssignmentsTable({ toast }) {
                   {isAdmin && (
                     <td className="num">
                       <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(a)}><Icons.edit size={13} /> Edit</button>
-                        <button className="btn btn-secondary btn-sm" onClick={() => remove(a)}><Icons.trash size={13} /> Delete</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(a)}><Icons.edit size={13} /> አርትዕ</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => remove(a)}><Icons.trash size={13} /> ሰርዝ</button>
                       </div>
                     </td>
                   )}
@@ -746,8 +751,8 @@ function EditAssignmentModal({ assignment, onClose, onDone, toast }) {
       if (evaluatorType !== "self") payload.evaluator_id = evaluator;
       const res = await api.put(`/evaluation-assignments/${assignment.id}`, payload);
       toast.push(res.status === "draft" && assignment.status !== "draft"
-        ? "Saved — workflow reset to draft because the evaluator/cycle changed"
-        : "Assignment updated", "success");
+        ? "ተቀምጧል — ገምጋሚው/ዑደቱ ስለተቀየረ የሥራ ሂደቱ ወደ ረቂቅ ተመልሷል"
+        : "ምደባው ተሻሽሏል", "success");
       onDone();
     } catch (err) {
       toast.push(err.message, "error");
@@ -759,7 +764,7 @@ function EditAssignmentModal({ assignment, onClose, onDone, toast }) {
     setReopening(true);
     try {
       await api.put(`/evaluation-assignments/${assignment.id}`, { action: "reopen" });
-      toast.push("Reopened — back to draft with answers kept", "success");
+      toast.push("እንደገና ተከፍቷል — ምላሾቹ ተጠብቀው ወደ ረቂቅ ተመልሷል", "success");
       onDone();
     } catch (err) {
       toast.push(err.message, "error");
@@ -769,40 +774,40 @@ function EditAssignmentModal({ assignment, onClose, onDone, toast }) {
 
   return (
     <Modal
-      title={`Edit assignment — ${assignment.subject_name}`}
-      subtitle={`${assignment.form_name} · ${assignment.evaluator_type} review${assignment.evaluator_name ? ` by ${assignment.evaluator_name}` : ""}`}
+      title={`ምደባ አርትዕ — ${assignment.subject_name}`}
+      subtitle={`${assignment.form_name} · ${PERSPECTIVE_LABEL[assignment.evaluator_type] || assignment.evaluator_type} ግምገማ${assignment.evaluator_name ? ` · በ ${assignment.evaluator_name}` : ""}`}
       onClose={onClose}
       footer={
         <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save changes"}</button>
+          <button className="btn btn-secondary" onClick={onClose}>ሰርዝ</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? "በማስቀመጥ ላይ…" : "ለውጦችን አስቀምጥ"}</button>
         </div>
       }
     >
       <form onSubmit={save}>
         <div className="form-grid">
           <div className="field">
-            <label>Due date</label>
+            <label>የመጨረሻ ቀን</label>
             <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
           </div>
           <div className="field">
-            <label>Cycle</label>
+            <label>ዑደት</label>
             <select value={cycle || ""} onChange={(e) => setCycle(Number(e.target.value))}>
-              {cycles.map((c) => <option key={c.id} value={c.id}>{c.name} {c.status === "active" ? "• active" : ""}</option>)}
+              {cycles.map((c) => <option key={c.id} value={c.id}>{c.name} {c.status === "active" ? "• ንቁ" : ""}</option>)}
             </select>
           </div>
           <div className="field">
-            <label>Perspective</label>
+            <label>የግምገማ አቅጣጫ</label>
             <select value={evaluatorType} onChange={(e) => setEvaluatorType(e.target.value)}>
               {["self", "manager", "peer"].map((p) => <option key={p} value={p}>{PERSPECTIVE_LABEL[p]}</option>)}
             </select>
-            <span className="hint">Changing perspective or evaluator resets the workflow to draft.</span>
+            <span className="hint">የግምገማ አቅጣጫውን ወይም ገምጋሚውን መቀየር የሥራ ሂደቱን ወደ ረቂቅ ይመልሰዋል።</span>
           </div>
           {evaluatorType !== "self" && (
             <div className="field">
-              <label>Evaluator</label>
+              <label>ገምጋሚ</label>
               <select value={evaluator || ""} onChange={(e) => setEvaluator(Number(e.target.value))}>
-                <option value="">Select evaluator…</option>
+                <option value="">ገምጋሚ ይምረጡ…</option>
                 {employees.map((em) => <option key={em.id} value={em.id}>{em.full_name}{em.position ? ` · ${em.position}` : ""}</option>)}
               </select>
             </div>
@@ -812,9 +817,9 @@ function EditAssignmentModal({ assignment, onClose, onDone, toast }) {
         {assignment.status !== "draft" && (
           <div className="field" style={{ marginTop: 4 }}>
             <button type="button" className="btn btn-secondary" onClick={reopen} disabled={reopening}>
-              <Icons.swap size={14} /> {reopening ? "Reopening…" : "Reopen to draft (keeps answers)"}
+              <Icons.swap size={14} /> {reopening ? "በመክፈት ላይ…" : "ወደ ረቂቅ እንደገና ክፈት (ምላሾችን ያስቀምጣል)"}
             </button>
-            <span className="hint" style={{ marginLeft: 8 }}>Clears approvals and scores so the employee can revise and resubmit.</span>
+            <span className="hint" style={{ marginLeft: 8 }}>ሰራተኛው እንደገና አርትዖ ማቅረብ እንዲችል ማጽደቆችንና ነጥቦችን ያጸዳል።</span>
           </div>
         )}
       </form>

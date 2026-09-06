@@ -3,7 +3,7 @@
 
 export default function BarList({ items, color = "var(--indigo)" }) {
   if (!items || items.length === 0) {
-    return <div className="empty-state">No data yet.</div>;
+    return <div className="empty-state">እስካሁን መረጃ የለም።</div>;
   }
   return (
     <div>

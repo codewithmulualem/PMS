@@ -27,9 +27,9 @@ export default function TransferModal({ employee, units, positions, employees, o
         position_id: form.position_id || null,
         manager_id: form.manager_id || null,
         effective_date: form.effective_date || null,
-        reason: form.reason || "Transfer",
+        reason: form.reason || "ዝውውር",
       });
-      toast.push(`${employee.full_name} transferred`, "success");
+      toast.push(`${employee.full_name} ተዛውሯል`, "success");
       onSaved();
       onClose();
     } catch (err) {
@@ -41,38 +41,38 @@ export default function TransferModal({ employee, units, positions, employees, o
 
   return (
     <Modal
-      title={`Transfer ${employee.full_name}`}
-      subtitle={`Currently: ${employee.position || "no role"} · ${employee.department_name || ""}`}
+      title={`${employee.full_name} አዛውር`}
+      subtitle={`አሁን፦ ${employee.position || "የሥራ መደብ የለም"} · ${employee.department_name || ""}`}
       onClose={onClose}
       footer={
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Confirm transfer"}
+          {saving ? "በማስቀመጥ ላይ…" : "ዝውውሩን አረጋግጥ"}
         </button>
       }
     >
       <form onSubmit={save}>
         <div className="field">
-          <label>Destination unit</label>
+          <label>መድረሻ ክፍል</label>
           <select required value={form.department_id} onChange={(e) => setForm({ ...form, department_id: Number(e.target.value) || null, position_id: "" })}>
-            <option value="">— select —</option>
+            <option value="">— ይምረጡ —</option>
             {units.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
         </div>
         <div className="field">
-          <label>Position</label>
+          <label>የሥራ መደብ</label>
           <select value={form.position_id} onChange={(e) => setForm({ ...form, position_id: Number(e.target.value) || null })}>
-            <option value="">— keep / unassigned —</option>
+            <option value="">— እንደነበር / ሳይመደብ —</option>
             {unitPositions.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}{p.is_head === 1 ? " (head)" : ""}</option>
+              <option key={p.id} value={p.id}>{p.title}{p.is_head === 1 ? " (ኃላፊ)" : ""}</option>
             ))}
           </select>
         </div>
         <div className="field">
-          <label>New manager (auto-repoints primary reporting)</label>
+          <label>አዲስ አስተዳዳሪ (ዋና የሪፖርት ግንኙነትን በራስ-ሰር ያስተካክላል)</label>
           <select value={form.manager_id} onChange={(e) => setForm({ ...form, manager_id: Number(e.target.value) || null })}>
-            <option value="">— leave reporting unchanged —</option>
+            <option value="">— የሪፖርት ሁኔታውን እንደነበር ተው —</option>
             {employees.filter((emp) => emp.id !== employee.id).map((emp) => (
               <option key={emp.id} value={emp.id}>{emp.full_name}</option>
             ))}
@@ -80,17 +80,16 @@ export default function TransferModal({ employee, units, positions, employees, o
         </div>
         <div className="form-grid">
           <div className="field">
-            <label>Effective date</label>
+            <label>የሚጀምርበት ቀን</label>
             <input type="date" value={form.effective_date} onChange={(e) => setForm({ ...form, effective_date: e.target.value })} />
           </div>
           <div className="field">
-            <label>Reason</label>
-            <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Reorg / promotion" />
+            <label>ምክንያት</label>
+            <input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="ለምሳሌ፦ መዋቅራዊ ለውጥ / ዕድገት" />
           </div>
         </div>
         <div className="text-faint" style={{ fontSize: 12, lineHeight: 1.6 }}>
-          The transfer is recorded in the employee's org history (effective date + reason) and the audit log.
-          Choosing a new manager closes the previous primary reporting relationship.
+          ዝውውሩ በሰራተኛው የድርጅት ታሪክ (የሚጀምርበት ቀን + ምክንያት) እና በኦዲት መዝገብ ይመዘገባል። አዲስ አስተዳዳሪ መምረጥ የቀድሞውን ዋና የሪፖርት ግንኙነት ይዘጋዋል።
         </div>
       </form>
     </Modal>

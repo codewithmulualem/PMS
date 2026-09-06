@@ -1,5 +1,9 @@
 const PERSPECTIVE_LABEL = { self: "self review", manager: "manager review", peer: "peer feedback" };
 
+const STAR_LABELS = {
+  1: "ደካማ", 2: "መካከለኛ", 3: "ጥሩ", 4: "በጣም ጥሩ", 5: "ምርጥ",
+};
+
 function parseMulti(v) {
   if (!v) return [];
   try {
@@ -10,12 +14,109 @@ function parseMulti(v) {
   }
 }
 
-export default function EvaluationForm({ form, values = {}, onChange, readOnly = false }) {
+export default function EvaluationForm({ form, values = {}, onChange, readOnly = false, simple = false }) {
   if (!form) return null;
 
   const ratingLabels = {
-    1: "Poor", 2: "Fair", 3: "Good", 4: "Very good", 5: "Excellent",
+    1: "ደካማ", 2: "መካከለኛ", 3: "ጥሩ", 4: "በጣም ጥሩ", 5: "ምርጥ",
   };
+
+  // Simple mode: star ratings only + one comment box
+  if (simple) {
+    const allQuestions = form.sections.flatMap((s) => s.questions || []);
+    const ratingQuestions = allQuestions.filter((q) => q.kind === "rating" || q.kind === "scale");
+    const textQuestion = allQuestions.find((q) => q.kind === "text");
+    const answeredCount = ratingQuestions.filter((q) => {
+      const ans = values[q.id];
+      return ans && ans.rating_value != null;
+    }).length;
+
+    return (
+      <div className="eval-form">
+        {/* Progress */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>
+            ጥያቄ {answeredCount} ከ {ratingQuestions.length}
+          </div>
+          <div className="meter-track">
+            <div
+              className="meter-fill"
+              style={{
+                width: `${ratingQuestions.length ? (answeredCount / ratingQuestions.length) * 100 : 0}%`,
+                background: "var(--indigo)",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Star rating questions */}
+        {ratingQuestions.map((q, idx) => {
+          const answer = values[q.id] || {};
+          const rating = answer.rating_value;
+
+          return (
+            <div key={q.id} style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
+                {q.text}
+                {q.required && <span style={{ color: "var(--crimson)" }}> *</span>}
+              </div>
+              {readOnly ? (
+                <div className="q-rating-read">
+                  {rating != null ? (
+                    <>
+                      {rating} <span className="q-rating-label">{STAR_LABELS[rating] || ""}</span>
+                    </>
+                  ) : (
+                    <span className="q-unanswered">አልተመለሰም።</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {[1, 2, 3, 4, 5].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => onChange(q.id, "rating_value", rating === v ? null : v)}
+                      style={{
+                        fontSize: 28,
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: v <= (rating || 0) ? "#f59e0b" : "#d1d5db",
+                        transition: "color 0.15s ease",
+                        padding: "0 2px",
+                      }}
+                      title={STAR_LABELS[v]}
+                    >
+                      ★
+                    </button>
+                  ))}
+                  {rating != null && (
+                    <span style={{ fontSize: 13, color: "var(--text-dim)", marginLeft: 8 }}>
+                      {STAR_LABELS[rating]}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Comment box */}
+        {!readOnly && textQuestion && (
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>ተጨማሪ አስተያየት አለ?</label>
+            <textarea
+              value={values[textQuestion.id]?.text_value || ""}
+              onChange={(e) => onChange(textQuestion.id, "text_value", e.target.value)}
+              placeholder="ተጨማሪ ሐሳብ ያካፍሉ…"
+              rows={3}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   function Question({ q }) {
     const answer = values[q.id] || {};
@@ -42,12 +143,12 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
           {readOnly ? (
             text
               ? <div className="q-answer-text">{text}</div>
-              : <div className="q-unanswered">No response provided.</div>
+              : <div className="q-unanswered">ምላሽ አልተሰጠም።</div>
           ) : (
             <textarea
               value={text}
               onChange={(e) => onChange(q.id, "text_value", e.target.value)}
-              placeholder="Write your response…"
+              placeholder="ምላሽዎን ይጻፉ…"
               rows={3}
             />
           )}
@@ -63,7 +164,7 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
           {readOnly ? (
             text
               ? <div className="q-answer-text">{text}</div>
-              : <div className="q-unanswered">Not answered.</div>
+              : <div className="q-unanswered">አልተመለሰም።</div>
           ) : (
             <div className="option-row">
               {(q.options || []).map((opt) => (
@@ -95,7 +196,7 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
           {readOnly ? (
             chosen.length
               ? <div className="q-answer-text">{chosen.join(" · ")}</div>
-              : <div className="q-unanswered">Not answered.</div>
+              : <div className="q-unanswered">አልተመለሰም።</div>
           ) : (
             <div className="option-row">
               {(q.options || []).map((opt) => (
@@ -123,7 +224,7 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
           {readOnly ? (
             rating != null
               ? <div className="q-scale-read">{rating}<span className="q-max mono"> / {max}</span></div>
-              : <div className="q-unanswered">Not answered.</div>
+              : <div className="q-unanswered">አልተመለሰም።</div>
           ) : (
             <div className="scale-row">
               <input
@@ -156,7 +257,7 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
         {readOnly ? (
           rating != null
             ? <div className="q-rating-read">{rating} <span className="q-rating-label">{ratingLabels[rating] || ""}</span></div>
-            : <div className="q-unanswered">Not answered.</div>
+            : <div className="q-unanswered">አልተመለሰም።</div>
         ) : (
           <div className="rating-row">
             {Array.from({ length: max }, (_, i) => i + 1).map((v) => (
@@ -180,14 +281,14 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
 
   function NoteBox({ q, note, readOnly, onChange }) {
     if (readOnly) {
-      return note ? <div className="q-note-read">Note — {note}</div> : null;
+      return note ? <div className="q-note-read">ማስታወሻ — {note}</div> : null;
     }
     return (
       <textarea
         className="q-note-input"
         value={note}
         onChange={(e) => onChange(q.id, "note", e.target.value)}
-        placeholder="Note (optional) — context or evidence for this answer"
+        placeholder="ማስታወሻ (አማራጭ) — የዚህ ምላሽ አውድ ወይም ማስረጃ"
         rows={2}
       />
     );
@@ -205,7 +306,7 @@ export default function EvaluationForm({ form, values = {}, onChange, readOnly =
             <div className="eval-section-title">{s.title}</div>
             <div className="flex gap-8">
               {s.perspective && <span className={`chip perspective-chip chip-${s.perspective}`}>{PERSPECTIVE_LABEL[s.perspective] || s.perspective}</span>}
-              {s.weight != null && <span className="chip chip-neutral mono">weight {s.weight}</span>}
+              {s.weight != null && <span className="chip chip-neutral mono">ክብደት {s.weight}</span>}
             </div>
           </div>
           {s.description && <div className="eval-section-desc">{s.description}</div>}

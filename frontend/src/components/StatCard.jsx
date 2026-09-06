@@ -26,7 +26,7 @@ export default function StatCard({
 }
 
 export function StatTrend({ delta, invert = false }) {
-  if (delta == null) return <span className="trend-flat">no prior data</span>;
+  if (delta == null) return <span className="trend-flat">የቀድሞ መረጃ የለም</span>;
   const up = invert ? delta < 0 : delta > 0;
   const flat = Math.abs(delta) < 0.05;
   const cls = flat ? "trend-flat" : up ? "trend-up" : "trend-down";

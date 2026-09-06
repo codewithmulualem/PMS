@@ -31,16 +31,22 @@ def apply_migrations(conn):
         row["version"]
         for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
     }
+    # Older releases recorded some migrations as bare numbers (for example
+    # `013`) while the runner now records filename stems. Treat both forms as
+    # the same migration so upgrading an existing database never replays DDL.
+    applied_numbers = {version.split("_", 1)[0] for version in applied}
     if not os.path.isdir(MIGRATIONS_DIR):
         return
     for filename in sorted(f for f in os.listdir(MIGRATIONS_DIR) if f.endswith(".sql")):
         version = filename[:-4]
-        if version in applied:
+        if version in applied or version.split("_", 1)[0] in applied_numbers:
             continue
         with open(os.path.join(MIGRATIONS_DIR, filename), "r") as f:
             conn.executescript(f.read())
         conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
         conn.commit()
+        applied.add(version)
+        applied_numbers.add(version.split("_", 1)[0])
 
 
 def init_db():

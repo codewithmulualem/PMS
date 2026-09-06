@@ -210,7 +210,8 @@ def get_weights(db, cycle_id):
 
 def get_rating(db, score):
     row = db.execute(
-        "SELECT label, color FROM rating_bands WHERE ? >= min_score AND ? < max_score",
+        "SELECT label, color FROM rating_bands "
+        "WHERE ? >= min_score AND ? < max_score ORDER BY min_score DESC LIMIT 1",
         (score, score),
     ).fetchone()
     return dict(row) if row else {"label": "Unrated", "color": "#888888"}

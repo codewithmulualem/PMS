@@ -45,7 +45,7 @@ export default function OrgTree({ tree, unitTypes, selectedId, onSelect, onEdit,
             className="tree-toggle"
             onClick={() => toggle(node.id)}
             disabled={!hasChildren}
-            aria-label={isOpen ? "Collapse" : "Expand"}
+            aria-label={isOpen ? "ደብቅ" : "ክፈት"}
           >
             {hasChildren ? (
               isOpen ? <Icons.chevronDown size={14} /> : <Icons.chevronRight size={14} />
@@ -60,20 +60,20 @@ export default function OrgTree({ tree, unitTypes, selectedId, onSelect, onEdit,
               <span className="chip chip-neutral">{typeName(node.unit_type_id)}</span>
             )}
             {head && <span className="tree-head">{head.full_name}</span>}
-            {!node.active && <span className="chip chip-neutral">inactive</span>}
+            {!node.active && <span className="chip chip-neutral">ንቁ አይደለም</span>}
             <span className="tree-count mono">
-              {node.employee_count} emp · {node.children?.length || 0} sub
+              {node.employee_count} ሰራተኞች · {node.children?.length || 0} ንዑስ ክፍሎች
             </span>
           </div>
           {canEdit && (
             <div className="tree-actions">
-              <button title="Add child unit" onClick={() => onAddChild(node)}>
+              <button title="የልጅ ክፍል ጨምር" onClick={() => onAddChild(node)}>
                 <Icons.plus size={14} />
               </button>
-              <button title="Edit unit" onClick={() => onEdit(node)}>
+              <button title="ክፍል አርትዕ" onClick={() => onEdit(node)}>
                 <Icons.edit size={14} />
               </button>
-              <button title="Delete unit" onClick={() => onDelete(node)}>
+              <button title="ክፍል ሰርዝ" onClick={() => onDelete(node)}>
                 <Icons.trash size={14} />
               </button>
             </div>
@@ -98,12 +98,12 @@ export default function OrgTree({ tree, unitTypes, selectedId, onSelect, onEdit,
         >
           <span className="tree-leaf" />
           <div className="tree-main">
-            <span className="tree-name faint">Drop here to make it a top-level unit</span>
+            <span className="tree-name faint">ዋና ክፍል ለማድረግ እዚህ ይጣሉ</span>
           </div>
         </div>
       )}
       {tree.map((n) => renderNode(n, 0))}
-      {tree.length === 0 && <div className="empty-state">No org units yet — create the root.</div>}
+      {tree.length === 0 && <div className="empty-state">እስካሁን የድርጅት ክፍል የለም — ዋናውን ይፍጠሩ።</div>}
     </div>
   );
 }

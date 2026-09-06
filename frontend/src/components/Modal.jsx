@@ -20,7 +20,7 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
             <div className="modal-title">{title}</div>
             {subtitle && <div className="modal-sub">{subtitle}</div>}
           </div>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
+          <button className="modal-close" onClick={onClose} aria-label="ዝጋ">
             <Icons.close />
           </button>
         </div>

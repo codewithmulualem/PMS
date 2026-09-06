@@ -17,6 +17,29 @@ class UsernameTaken(Exception):
     pass
 
 
+def _validate_reporting_link(db, employee_id, supervisor_id):
+    """Validate ids and reject cycles in the primary manager chain."""
+    if not employee_id or not supervisor_id:
+        return "employee_id and supervisor_id are required"
+    if employee_id == supervisor_id:
+        return "An employee cannot be their own supervisor."
+    employee = db.execute("SELECT id FROM employees WHERE id=?", (employee_id,)).fetchone()
+    supervisor = db.execute("SELECT id FROM employees WHERE id=?", (supervisor_id,)).fetchone()
+    if not employee or not supervisor:
+        return "employee_id and supervisor_id must reference existing employees"
+    current = supervisor_id
+    seen = set()
+    while current is not None:
+        if current == employee_id:
+            return "The reporting relationship would create a management cycle"
+        if current in seen:
+            return "The existing management hierarchy contains a cycle"
+        seen.add(current)
+        row = db.execute("SELECT manager_id FROM employees WHERE id=?", (current,)).fetchone()
+        current = row["manager_id"] if row else None
+    return None
+
+
 def _log(db, entity_type, entity_id, action, old_value=None, new_value=None):
     db.execute(
         "INSERT INTO audit_log (entity_type, entity_id, action, old_value, new_value, changed_by) "
@@ -68,7 +91,7 @@ def _ensure_user(db, employee_id, email, username=None, password=None, role=None
             valid_roles = [r["name"] for r in db.execute("SELECT name FROM roles ORDER BY name").fetchall()]
             if valid_roles:
                 raise ValueError(f"role must be one of: {', '.join(valid_roles)}")
-            elif target_role not in ("admin", "manager", "employee", "executive"):
+            elif target_role not in ("admin", "director", "dept_head", "team_leader", "employee", "executive"):
                 raise ValueError("role must be one of: admin, manager, employee, executive")
 
         uname = (username.strip() if username and username.strip() else existing["username"])
@@ -127,7 +150,7 @@ def _ensure_user(db, employee_id, email, username=None, password=None, role=None
             valid_roles = [r["name"] for r in db.execute("SELECT name FROM roles ORDER BY name").fetchall()]
             if valid_roles:
                 raise ValueError(f"role must be one of: {', '.join(valid_roles)}")
-            elif target_role not in ("admin", "manager", "employee", "executive"):
+            elif target_role not in ("admin", "director", "dept_head", "team_leader", "employee", "executive"):
                 raise ValueError("role must be one of: admin, manager, employee, executive")
 
         if username and username.strip():
@@ -207,7 +230,16 @@ def list_employees():
                 "LEFT JOIN users u ON u.employee_id = e.id "
                 "LEFT JOIN roles r ON r.id = u.role_id ORDER BY e.full_name"
             ).fetchall()
-        elif g.user["role"] == "manager":
+        elif g.user["role"] in ("director", "dept_head", "team_leader", "manager"):
+            unit_ids = [r[0] for r in db.execute(
+                "WITH RECURSIVE subtree(id) AS ("
+                "  SELECT ? UNION "
+                "  SELECT d.id FROM departments d JOIN subtree s ON d.parent_id = s.id"
+                ") SELECT id FROM subtree",
+                (g.user["employee_id"] and db.execute(
+                    "SELECT department_id FROM employees WHERE id=?", (g.user["employee_id"],)).fetchone()["department_id"],)
+            ).fetchall()]
+            marks = ",".join("?" * len(unit_ids))
             rows = db.execute(
                 "SELECT e.*, d.name as department_name, u.username, "
                 "COALESCE(r.name, u.role, 'employee') AS role, "
@@ -215,8 +247,8 @@ def list_employees():
                 "LEFT JOIN departments d ON d.id = e.department_id "
                 "LEFT JOIN users u ON u.employee_id = e.id "
                 "LEFT JOIN roles r ON r.id = u.role_id "
-                "WHERE e.manager_id = ? OR e.id = ? ORDER BY e.full_name",
-                (g.user["employee_id"], g.user["employee_id"]),
+                f"WHERE e.department_id IN ({marks}) OR e.id = ? ORDER BY e.full_name",
+                (*unit_ids, g.user["employee_id"]),
             ).fetchall()
         else:
             rows = db.execute(
@@ -423,9 +455,9 @@ def delete_employee(employee_id):
             "SELECT id FROM approval_requests WHERE initiator_id=?", (employee_id,)).fetchall()]
         if request_ids:
             ph = ",".join("?" * len(request_ids))
-            db.execute(f"DELETE FROM approval_requests WHERE id IN ({ph})", request_ids)
             db.execute(f"UPDATE evaluation_assignments SET approval_request_id=NULL "
                        f"WHERE approval_request_id IN ({ph})", request_ids)
+            db.execute(f"DELETE FROM approval_requests WHERE id IN ({ph})", request_ids)
         db.execute("UPDATE approval_actions SET actor_id=NULL WHERE actor_id=?", (employee_id,))
 
         # Performance data.
@@ -436,6 +468,19 @@ def delete_employee(employee_id):
         db.execute("DELETE FROM performance_scores WHERE employee_id=?", (employee_id,))
         db.execute("DELETE FROM evaluations WHERE employee_id=? OR evaluator_id=?",
                    (employee_id, employee_id))
+
+        # Preserve organizational records while removing employee-owned rows.
+        # These columns are nullable by design and otherwise block the final
+        # employee delete through foreign-key enforcement.
+        db.execute(
+            "UPDATE program_activities SET assignee_id=NULL, assigned_by=NULL "
+            "WHERE assignee_id=? OR assigned_by=?", (employee_id, employee_id)
+        )
+        db.execute(
+            "UPDATE strategic_goals SET owner_id=NULL, assigned_to_id=NULL "
+            "WHERE owner_id=? OR assigned_to_id=?", (employee_id, employee_id)
+        )
+        db.execute("DELETE FROM weekly_plans WHERE employee_id=?", (employee_id,))
 
         # Evaluation assignments as subject or evaluator (+ notifications & cascades).
         aid_list = [r["id"] for r in db.execute(
@@ -722,6 +767,14 @@ def update_org_unit(unit_id):
                 updates[f] = data[f]
         if "active" in data:
             updates["active"] = 1 if data["active"] else 0
+        if "parent_id" in updates and updates["parent_id"] is not None:
+            if is_unit_descendant(db, updates["parent_id"], unit_id):
+                return jsonify({"error": "Cannot place a unit under itself or its descendant."}), 400
+            err = _check_level_order(
+                db, updates["parent_id"], updates.get("unit_type_id", old["unit_type_id"])
+            )
+            if err and not bool(data.get("override")):
+                return jsonify({"error": err}), 400
         if updates:
             set_clause = ", ".join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE departments SET {set_clause} WHERE id=?", (*updates.values(), unit_id))
@@ -890,7 +943,7 @@ def list_reporting_relationships():
         params = []
         role = g.user["role"]
         if role not in ("admin", "executive"):
-            if role == "manager":
+            if role in ("director", "dept_head", "team_leader", "manager"):
                 where = "WHERE r.supervisor_id = ? OR r.employee_id = ?"
                 params = [g.user["employee_id"], g.user["employee_id"]]
             else:
@@ -921,10 +974,11 @@ def create_reporting_relationship():
     valid_types = {"primary", "secondary", "functional", "administrative", "acting", "temporary"}
     if rtype not in valid_types:
         return jsonify({"error": f"relationship_type must be one of {sorted(valid_types)}"}), 400
-    if employee_id == supervisor_id:
-        return jsonify({"error": "An employee cannot be their own supervisor."}), 400
     db = get_db()
     try:
+        err = _validate_reporting_link(db, employee_id, supervisor_id)
+        if err:
+            return jsonify({"error": err}), 400
         # Keep a single active relationship per type.
         db.execute(
             "UPDATE reporting_relationships SET is_active=0 "
@@ -962,20 +1016,39 @@ def update_reporting_relationship(rid):
                 updates[f] = data[f]
         if "is_active" in data:
             updates["is_active"] = 1 if data["is_active"] else 0
+        employee_id = updates.get("employee_id", old["employee_id"])
+        supervisor_id = updates.get("supervisor_id", old["supervisor_id"])
+        relationship_type = updates.get("relationship_type", old["relationship_type"])
+        is_active = updates.get("is_active", old["is_active"])
+        if relationship_type == "primary" and is_active:
+            err = _validate_reporting_link(db, employee_id, supervisor_id)
+            if err:
+                return jsonify({"error": err}), 400
+        else:
+            employee = db.execute("SELECT id FROM employees WHERE id=?", (employee_id,)).fetchone()
+            supervisor = db.execute("SELECT id FROM employees WHERE id=?", (supervisor_id,)).fetchone()
+            if not employee or not supervisor:
+                return jsonify({"error": "employee_id and supervisor_id must reference existing employees"}), 400
         if updates:
+            if relationship_type == "primary" and is_active:
+                db.execute(
+                    "UPDATE reporting_relationships SET is_active=0 "
+                    "WHERE employee_id=? AND relationship_type='primary' AND is_active=1 AND id<>?",
+                    (employee_id, rid),
+                )
             set_clause = ", ".join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE reporting_relationships SET {set_clause} WHERE id=?", (*updates.values(), rid))
-            if old["relationship_type"] == "primary":
-                if "supervisor_id" in updates:
-                    db.execute("UPDATE employees SET manager_id=? WHERE id=?",
-                               (updates["supervisor_id"], old["employee_id"]))
-                if updates.get("is_active") == 0:
+            if relationship_type == "primary" and is_active:
+                db.execute("UPDATE employees SET manager_id=? WHERE id=?",
+                           (supervisor_id, employee_id))
+            elif old["relationship_type"] == "primary":
+                if updates.get("is_active") == 0 or relationship_type != "primary":
                     other = db.execute(
                         "SELECT COUNT(*) c FROM reporting_relationships WHERE employee_id=? "
                         "AND relationship_type='primary' AND is_active=1 AND id != ?",
-                        (old["employee_id"], rid)).fetchone()["c"]
+                        (employee_id, rid)).fetchone()["c"]
                     if other == 0:
-                        db.execute("UPDATE employees SET manager_id=NULL WHERE id=?", (old["employee_id"],))
+                        db.execute("UPDATE employees SET manager_id=NULL WHERE id=?", (employee_id,))
             
             _log(db, "reporting_relationship", rid, "update", old_value=row_to_dict(old), new_value=updates)
             db.commit()
@@ -1101,6 +1174,12 @@ def transfer_employee(employee_id):
             updates["department_id"] = data["department_id"]
         if "position_id" in data:
             updates["position_id"] = data["position_id"]
+        if updates.get("department_id") is not None and not db.execute(
+                "SELECT 1 FROM departments WHERE id=?", (updates["department_id"],)).fetchone():
+            return jsonify({"error": "department_id does not reference an existing department"}), 400
+        if updates.get("position_id") is not None and not db.execute(
+                "SELECT 1 FROM positions WHERE id=?", (updates["position_id"],)).fetchone():
+            return jsonify({"error": "position_id does not reference an existing position"}), 400
         if updates:
             set_clause = ", ".join(f"{k}=?" for k in updates)
             db.execute(f"UPDATE employees SET {set_clause} WHERE id=?", (*updates.values(), employee_id))
@@ -1108,7 +1187,10 @@ def transfer_employee(employee_id):
         # Auto-repoint the primary reporting relationship when a manager is supplied.
         manager_id = data.get("manager_id")
         if manager_id is not None:
-            if manager_id and manager_id != employee_id:
+            if manager_id:
+                err = _validate_reporting_link(db, employee_id, manager_id)
+                if err:
+                    return jsonify({"error": err}), 400
                 db.execute(
                     "UPDATE reporting_relationships SET is_active=0 "
                     "WHERE employee_id=? AND relationship_type='primary' AND is_active=1",
@@ -1130,9 +1212,8 @@ def transfer_employee(employee_id):
             "reason, changed_by) VALUES (?,?,?,?,?,?)",
             (employee_id, updates.get("department_id", emp["department_id"]),
              updates.get("position_id", emp["position_id"]), effective,
-             data.get("reason") or "Transfer", g.user.get("employee_id")),
+            data.get("reason") or "Transfer", g.user.get("employee_id")),
         )
-        db.commit()
         new = row_to_dict(db.execute("SELECT * FROM employees WHERE id=?", (employee_id,)).fetchone())
         _log(db, "employee", employee_id, "transfer", old_value=old, new_value=new)
         db.commit()

@@ -28,7 +28,7 @@ export default function ApprovalTrail({ assignments = [] }) {
         trail.push({
           level,
           multi,
-          approver_name: requiredNames[i] || row?.approver_name || "top executive",
+          approver_name: requiredNames[i] || row?.approver_name || "ከፍተኛ አስፈፃሚ",
           decision: approved ? "approved" : undefined,
           comments: row?.comments,
           state: approved ? "done" : "active",
@@ -37,7 +37,7 @@ export default function ApprovalTrail({ assignments = [] }) {
     } else if (isCurrent) {
       trail.push({
         level,
-        approver_name: pendingNames[0] || assignment.next_approver_name || requiredNames[0] || "awaiting approver",
+        approver_name: pendingNames[0] || assignment.next_approver_name || requiredNames[0] || "አጽዳቂን በመጠባበቅ ላይ",
         state: "active",
       });
     } else if (rows.length) {
@@ -48,32 +48,32 @@ export default function ApprovalTrail({ assignments = [] }) {
         comments: r.comments,
       }));
     } else {
-      trail.push({ level, approver_name: "awaiting approver" });
+      trail.push({ level, approver_name: "አጽዳቂን በመጠባበቅ ላይ" });
     }
   }
 
   return (
     <div className="approval-trail">
-      <div className="card-title" style={{ margin: 0, marginBottom: 10 }}>Approval Chain</div>
+      <div className="card-title" style={{ margin: 0, marginBottom: 10 }}>የማጽደቅ ሰንሰለት</div>
       <div className="trail-steps">
         <TrailStep
           icon={<Icons.user size={13} />}
-          label="Employee submits"
+          label="ሰራተኛው አስገባ"
           status={status === "draft" ? "pending" : "done"}
         />
         {trail.map((t, i) => (
           <TrailStep
             key={`${t.level}-${i}`}
             icon={<Icons.shield size={13} />}
-            label={t.multi ? `Final sign-off — top executives` : `Level ${t.level} approval`}
-            sub={t.approver_name || "awaiting approver"}
+            label={t.multi ? "የመጨረሻ ማጽደቅ — ከፍተኛ አስፈፃሚዎች" : `የደረጃ ${t.level} ማጽደቅ`}
+            sub={t.approver_name || "አጽዳቂን በመጠባበቅ ላይ"}
             state={t.state || (t.decision === "approved" ? "done" : t.decision === "rejected" ? "rejected" : nextLevel === t.level ? "active" : "waiting")}
             comments={t.comments}
           />
         ))}
         <TrailStep
           icon={<Icons.spark size={13} />}
-          label="Score computed"
+          label="ነጥብ ተሰልቷል"
           state={status === "scored" ? "done" : "waiting"}
           sub={status === "scored" && assignment.score != null ? `score ${assignment.score.toFixed(1)}` : undefined}
         />
@@ -89,10 +89,10 @@ function TrailStep({ icon, label, sub, state, comments }) {
       <div className="trail-body">
         <div className="trail-label">
           {label}
-          {state === "done" && <span className="chip chip-success">done</span>}
-          {state === "active" && <span className="chip chip-warn">awaiting</span>}
-          {state === "rejected" && <span className="chip chip-danger">rejected</span>}
-          {state === "waiting" && <span className="chip chip-neutral">pending</span>}
+          {state === "done" && <span className="chip chip-success">ተጠናቋል</span>}
+          {state === "active" && <span className="chip chip-warn">በመጠባበቅ ላይ</span>}
+          {state === "rejected" && <span className="chip chip-danger">ተመልሷል</span>}
+          {state === "waiting" && <span className="chip chip-neutral">በመጠባበቅ ላይ</span>}
         </div>
         {sub && <div className="trail-sub">{sub}</div>}
         {comments && <div className="trail-comment">“{comments}”</div>}

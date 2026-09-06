@@ -10,13 +10,13 @@ import ApprovalTrail from "../components/ApprovalTrail";
 import { Icons } from "../components/icons";
 
 const STATUS_META = {
-  draft: { label: "not started", cls: "chip-neutral" },
-  submitted: { label: "submitted", cls: "chip-indigo" },
-  in_review: { label: "in review", cls: "chip-warn" },
-  rejected: { label: "returned for revision", cls: "chip-danger" },
-  scored: { label: "scored", cls: "chip-success" },
+  draft: { label: "አልተጀመረም", cls: "chip-neutral" },
+  submitted: { label: "ቀርቧል", cls: "chip-indigo" },
+  in_review: { label: "በግምገማ ላይ", cls: "chip-warn" },
+  rejected: { label: "ለማሻሻያ ተመልሷል", cls: "chip-danger" },
+  scored: { label: "ነጥብ ተሰጥቷል", cls: "chip-success" },
 };
-const PERSPECTIVE_LABEL = { self: "self review", manager: "manager review", peer: "peer review" };
+const PERSPECTIVE_LABEL = { self: "የራስ ግምገማ", manager: "የአስተዳዳሪ ግምገማ", peer: "የባልደረባ ግምገማ" };
 
 export default function MyEvaluations() {
   const { user } = useAuth();
@@ -27,7 +27,10 @@ export default function MyEvaluations() {
 
   async function load() {
     try {
-      setList(await api.get("/me/evaluations"));
+      const all = await api.get("/me/evaluations");
+      // Peer reviews live on the dedicated Peer Reviews page; this page shows
+      // the self and manager evaluations the user must complete.
+      setList(all.filter((a) => a.evaluator_type !== "peer"));
     } catch (err) {
       setError(err.message);
     }
@@ -37,28 +40,33 @@ export default function MyEvaluations() {
 
   return (
     <div>
-      <Topbar subtitle="Evaluation forms assigned to you as subject or reviewer — complete, submit, and track approval" />
+      <Topbar subtitle="እንደ ተገምጋሚ ወይም ገምጋሚ የተመደቡልዎትን ቅጾች ያጠናቅቁ፣ ያስገቡ እና ማጽደቁን ይከታተሉ" />
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="error-banner">
+          {error}
+          <button className="link-btn" onClick={load}>እንደገና ሞክር</button>
+        </div>
+      )}
 
       {list === null && !error ? (
         <Skeleton lines={4} height={26} />
       ) : (
         <div className="card">
           <div className="card-title">
-            My Evaluations
-            <span className="chip chip-neutral">{list.length} assigned</span>
+            የእኔ ግምገማዎች
+            <span className="chip chip-neutral">{(list || []).length} ተመድበዋል</span>
           </div>
-          {list.length === 0 ? (
+          {(list || []).length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">📋</div>
-              No evaluation forms assigned to you yet.
+              እስካሁን ለእርስዎ የተመደበ የግምገማ ቅጽ የለም።
             </div>
           ) : (
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr><th>Evaluation</th><th>Role</th><th>Cycle</th><th className="num">Due</th><th>Status</th><th className="num">Score</th><th className="num" /></tr>
+                  <tr><th>ግምገማ</th><th>ሚና</th><th>ዑደት</th><th className="num">የመጨረሻ ቀን</th><th>ሁኔታ</th><th className="num">ነጥብ</th><th className="num" /></tr>
                 </thead>
                 <tbody>
                   {list.map((a) => {
@@ -70,7 +78,7 @@ export default function MyEvaluations() {
                         <td>
                           <div className="cell-strong">{a.form_name}</div>
                           <div className="cell-sub">
-                            {isReviewer ? `Reviewing ${a.subject_name}` : a.subject_name !== user.employee?.full_name ? `About ${a.subject_name}` : "Your evaluation"}
+                            {isReviewer ? `${a.subject_name}ን እየገመገሙ` : a.subject_name !== user.employee?.full_name ? `ስለ ${a.subject_name}` : "የእርስዎ ግምገማ"}
                           </div>
                         </td>
                         <td>
@@ -85,20 +93,20 @@ export default function MyEvaluations() {
                         <td><span className={`chip ${meta.cls}`}>{meta.label}</span></td>
                         <td className="num cell-strong">
                           {a.overall_score != null
-                            ? <span className="mono" title="Combined 360 score">{a.overall_score.toFixed(1)}</span>
+                            ? <span className="mono" title="የ360 ግምገማ ጠቅላላ ነጥብ">{a.overall_score.toFixed(1)}</span>
                             : a.score != null ? <span className="mono">{a.score.toFixed(1)}</span> : "—"}
                         </td>
                         <td className="num">
                           {canOpen ? (
                             <button className="btn btn-secondary btn-sm" onClick={() => setOpenId(a.id)}>
                               {a.status === "draft" || a.status === "rejected" ? (
-                                <><Icons.edit size={13} /> Fill</>
+                                <><Icons.edit size={13} /> ሙላ</>
                               ) : (
-                                <><Icons.eye size={13} /> View</>
+                                <><Icons.eye size={13} /> ይመልከቱ</>
                               )}
                             </button>
                           ) : (
-                            <span className="text-faint" style={{ fontSize: 11 }}>Result shown after review</span>
+                            <span className="text-faint" style={{ fontSize: 11 }}>ውጤቱ ከግምገማ በኋላ ይታያል</span>
                           )}
                         </td>
                       </tr>
@@ -141,7 +149,7 @@ function EvaluationModal({ assignmentId, onClose, onChanged, toast }) {
     }).catch((e) => toast.push(e.message, "error"));
   }, [assignmentId, toast]);
 
-  if (!data) return <Modal title="Loading…" onClose={onClose}><div className="empty-state">Loading form…</div></Modal>;
+  if (!data) return <Modal title="በመጫን ላይ…" onClose={onClose}><div className="empty-state">ቅጹ እየተጫነ ነው…</div></Modal>;
 
   const editable = data.status === "draft" || data.status === "rejected";
   const isReviewer = data.evaluator?.id === user.employee_id && data.evaluator_type !== "self";
@@ -159,7 +167,7 @@ function EvaluationModal({ assignmentId, onClose, onChanged, toast }) {
     try {
       const res = await api.post(`/evaluations/${assignmentId}/answers`, { action, answers });
       toast.push(
-        action === "submit" ? "Submitted — sent up the approval chain" : "Draft saved",
+        action === "submit" ? "ቀርቧል — በማጽደቅ ሰንሰለቱ ተልኳል" : "ረቂቁ ተቀምጧል",
         "success",
       );
       onChanged();
@@ -173,19 +181,19 @@ function EvaluationModal({ assignmentId, onClose, onChanged, toast }) {
   return (
     <Modal
       title={data.form.name}
-      subtitle={`${data.cycle?.name || ""} · ${STATUS_META[data.status]?.label || data.status}${isOverdue(data) ? " · overdue" : ""}`}
+      subtitle={`${data.cycle?.name || ""} · ${STATUS_META[data.status]?.label || data.status}${isOverdue(data) ? " · ጊዜው አልፏል" : ""}`}
       onClose={onClose}
       wide
       footer={
         <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Close</button>
+          <button className="btn btn-secondary" onClick={onClose}>ዝጋ</button>
           {editable && (
             <>
               <button className="btn btn-secondary" onClick={() => saveOrSubmit("save")} disabled={saving || submitting}>
-                {saving ? "Saving…" : "Save draft"}
+                {saving ? "በማስቀመጥ ላይ…" : "ረቂቅ አስቀምጥ"}
               </button>
               <button className="btn btn-primary" onClick={() => saveOrSubmit("submit")} disabled={saving || submitting}>
-                <Icons.send size={15} /> {submitting ? "Submitting…" : "Submit for approval"}
+                <Icons.send size={15} /> {submitting ? "በማስገባት ላይ…" : "ለማጽደቅ አስገባ"}
               </button>
             </>
           )}
@@ -194,14 +202,14 @@ function EvaluationModal({ assignmentId, onClose, onChanged, toast }) {
     >
       <div className={`decision-banner ${isReviewer ? "" : "banner-muted"}`} style={{ borderLeftColor: isReviewer ? "var(--indigo)" : "var(--slate)" }}>
         {isReviewer
-          ? <><Icons.shield size={15} /> You are completing the <b>{PERSPECTIVE_LABEL[data.evaluator_type]}</b> for <b>{data.employee?.full_name}</b>.</>
-          : <><Icons.user size={15} /> This is your <b>{PERSPECTIVE_LABEL[data.evaluator_type] || data.evaluator_type}</b> evaluation.</>}
+          ? <><Icons.shield size={15} /> ለ<b>{data.employee?.full_name}</b> የ<b>{PERSPECTIVE_LABEL[data.evaluator_type]}</b> ግምገማ እያጠናቀቁ ነው።</>
+          : <><Icons.user size={15} /> ይህ የእርስዎ <b>{PERSPECTIVE_LABEL[data.evaluator_type] || data.evaluator_type}</b> ግምገማ ነው።</>}
       </div>
 
       {data.status === "rejected" && (
         <div className="error-banner" style={{ marginBottom: 14 }}>
           <Icons.alert size={15} />
-          This evaluation was returned for revision. See the reason below, revise, and resubmit.
+          ይህ ግምገማ ለማሻሻያ ተመልሷል። ከታች ያለውን ምክንያት ይመልከቱ፣ ያሻሽሉ እና እንደገና ያስገቡ።
         </div>
       )}
       <EvaluationForm form={data.form} values={values} onChange={editable ? setAnswer : undefined} readOnly={!editable} />
@@ -213,12 +221,12 @@ function EvaluationModal({ assignmentId, onClose, onChanged, toast }) {
           </div>
           <div>
             <div className="cell-strong">
-              {data.overall_score != null ? "Combined 360 score" : "Final score"}
+              {data.overall_score != null ? "የተጣመረ የ360 ነጥብ" : "የመጨረሻ ነጥብ"}
             </div>
             <div className="cell-sub">
               {data.overall_score != null
-                ? "All completed perspectives weighted by their perspective weights."
-                : "Deterministically computed from the form answers, weighted by evaluation perspective."}
+                ? "ሁሉም የተሟሉ አቅጣጫዎች በተወሰኑ ክብደቶች ተመዝነዋል።"
+                : "ከቅጹ ምላሾች በተወሰኑ የግምገማ አቅጣጫ ክብደቶች ተሰልቷል።"}
             </div>
           </div>
         </div>

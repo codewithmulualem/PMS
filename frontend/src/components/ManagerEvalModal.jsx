@@ -11,7 +11,7 @@ export default function ManagerEvalModal({ member, cycleId, onClose, onSaved, to
 
   async function submit(e) {
     e.preventDefault();
-    if (!cycleId) { toast.push("Select a performance cycle first", "error"); return; }
+    if (!cycleId) { toast.push("መጀመሪያ የአፈጻጸም ዑደት ይምረጡ", "error"); return; }
     setSaving(true);
     try {
       await api.post("/evaluations", {
@@ -21,7 +21,7 @@ export default function ManagerEvalModal({ member, cycleId, onClose, onSaved, to
         behavior_score: behavior === "" ? null : Number(behavior),
         comments: comments || null,
       });
-      toast.push(`Manager assessment saved for ${member.employee.full_name}`, "success");
+      toast.push(`የ${member.employee.full_name} የአስተዳዳሪ ግምገማ ተቀምጧል`, "success");
       onSaved();
     } catch (err) {
       toast.push(err.message, "error");
@@ -32,30 +32,30 @@ export default function ManagerEvalModal({ member, cycleId, onClose, onSaved, to
 
   return (
     <Modal
-      title={title || `Assess ${member.employee.full_name}`}
-      subtitle={subtitle || `Manager evaluation · ${member.employee.position}`}
+      title={title || `${member.employee.full_name}ን ገምግም`}
+      subtitle={subtitle || `የአስተዳዳሪ ግምገማ · ${member.employee.position}`}
       onClose={onClose}
       footer={
         <div className="flex gap-8" style={{ justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn btn-secondary" onClick={onClose}>ዝጋ</button>
           <button className="btn btn-primary" form="eval-form" type="submit" disabled={saving}>
-            <Icons.send size={15} /> {saving ? "Saving…" : "Submit assessment"}
+            <Icons.send size={15} /> {saving ? "በማስቀመጥ ላይ…" : "ግምገማ አስገባ"}
           </button>
         </div>
       }
     >
       <form id="eval-form" onSubmit={submit}>
         <div className="field">
-          <label>Behavior score (0–100)</label>
-          <input type="number" min="0" max="100" value={behavior} onChange={(e) => setBehavior(e.target.value)} placeholder="e.g. 78" required />
-          <span className="hint">Collaboration, communication, ownership</span>
+          <label>የባህሪ ነጥብ (0–100)</label>
+          <input type="number" min="0" max="100" value={behavior} onChange={(e) => setBehavior(e.target.value)} placeholder="ለምሳሌ፦ 78" required />
+          <span className="hint">ትብብር፣ ግንኙነት እና ኃላፊነት</span>
         </div>
         <div className="field">
-          <label>Comments (required evidence)</label>
-          <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="Specific, evidence-backed observations…" required />
+          <label>አስተያየት (አስፈላጊ ማስረጃ)</label>
+          <textarea value={comments} onChange={(e) => setComments(e.target.value)} placeholder="የተወሰኑ በማስረጃ የተደገፉ ምልከታዎች…" required />
         </div>
         <div className="text-faint" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
-          This assessment feeds the calculated score. It is recorded in the audit trail and remains subject to calibration and human review.
+          ይህ ግምገማ ለሚሰላው ነጥብ ግብዓት ይሆናል። በኦዲት መዝገብ ይመዘገባል እና በሰው ግምገማ ይረጋገጣል።
         </div>
       </form>
     </Modal>

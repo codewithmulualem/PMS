@@ -26,7 +26,7 @@ export default function ScoreRing({ score, size = 112, color = "#4c5fd5" }) {
       </svg>
       <div className="score-ring-value">
         <div className="score-ring-number">{score != null ? score.toFixed(1) : "—"}</div>
-        <div className="score-ring-label">overall</div>
+        <div className="score-ring-label">ጠቅላላ</div>
       </div>
     </div>
   );

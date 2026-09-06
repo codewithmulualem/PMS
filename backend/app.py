@@ -14,10 +14,18 @@ from routes.ai_routes import bp as ai_bp
 from routes.form_routes import bp as form_bp
 from routes.reference_routes import bp as reference_bp
 from routes.program_routes import bp as program_bp
-
+from routes.strategic_goal_routes import bp as strategic_goal_bp
+from routes.weekly_plan_routes import bp as weekly_plan_bp
+from routes.tier_overview_routes import bp as tier_overview_bp
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = int(
+    os.environ.get("PMS_MAX_CONTENT_LENGTH", str(2 * 1024 * 1024))
+)
 
-ALLOWED_ORIGIN = os.environ.get("PMS_ALLOWED_ORIGIN", "*")  # set to your frontend origin in production
+# Keep a safe local-development default. Production deployments must provide an
+# explicit origin instead of silently allowing every website to call the API.
+ALLOWED_ORIGIN = os.environ.get("PMS_ALLOWED_ORIGIN", "http://localhost:5173")
+FLASK_DEBUG = os.environ.get("PMS_DEBUG", "0").lower() in ("1", "true", "yes")
 
 
 @app.after_request
@@ -25,6 +33,10 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Vary"] = "Origin"
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
     return response
 
 
@@ -50,6 +62,9 @@ app.register_blueprint(ai_bp)
 app.register_blueprint(form_bp)
 app.register_blueprint(reference_bp)
 app.register_blueprint(program_bp)
+app.register_blueprint(strategic_goal_bp)
+app.register_blueprint(weekly_plan_bp)
+app.register_blueprint(tier_overview_bp)
 
 
 @app.errorhandler(404)
@@ -64,4 +79,4 @@ def server_error(_e):
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=FLASK_DEBUG)
